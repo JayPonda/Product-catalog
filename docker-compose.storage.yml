@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16.15-alpine3.24
+    container_name: postgres
+    environment:
+      POSTGRES_USER: product_catalog_user
+      POSTGRES_PASSWORD: product_catalog_password
+      POSTGRES_DB: product_catalog_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+volumes:
+  postgres_data:
