@@ -14,16 +14,26 @@
     - c. frontend setup
         - i. node and vue3
         - ii. server (watcher)
-2. production setup
+2. Tools information
+    - a. Backend
+        - i. migration
+        - ii. orm
+        - iii. uuid
+        - iv. testing
+    - b. Frontend
+        - i. material UI
+        - ii. testing
+    - c. General
+        - i. hooks
+3. production setup
     - a. config envs
     - b. docker setup
-2. scope description
+4. scope description
     - a. form simulator
-    - b. duplicate order aggrigator
-    - c. sql questions
-3. assumptions
-4. project description
-5. project structure
+    - b. duplicate order aggrigator (Cli)
+5. assumptions
+6. project description
+7. project structure
     - a. backend
     - b. frontend
 
@@ -101,3 +111,25 @@ $ root/server > make mdown
 ```
 $ root/server > make dev
 ```
+
+### c. Frontend setup
+
+#### i. node and vue3
+
+- we use node environment. here so please install the node.
+- we use pnpm as a package manager so install that as well. 
+> npx get-pnpm
+
+- app directory have the code for frontend.
+- first of all you need to install the dependacyes of the project.
+```
+$ root/app > pnpm install 
+```
+
+#### ii. server (watcher)
+
+- you are ready to run this project. for that run below command. 
+```
+$ root/app > pnpm dev 
+```
+
