@@ -1,4 +1,4 @@
-package repositories
+package services
 
 import (
 	"database/sql"
@@ -10,27 +10,27 @@ import (
 	"github.com/google/uuid"
 )
 
-type CategoryRepository struct {
+type CategoryService struct {
 	Db     *goqu.Database
 	Logger *utils.StructuredLogger
 }
 
 const CATEGORY_DB = "categories"
 
-func InitCategoryRepository(
+func InitCategoryService(
 	db *goqu.Database,
 	logger *utils.StructuredLogger,
-) (*CategoryRepository, error) {
-	return &CategoryRepository{
+) (*CategoryService, error) {
+	return &CategoryService{
 		Db:     db,
 		Logger: logger,
 	}, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID) (models.Category, error) {
+func (categoryServicePtr *CategoryService) GetCategoryById(id uuid.UUID) (models.Category, error) {
 	var category models.Category
 
-	found, err := CategoryRepositoryPtr.Db.
+	found, err := categoryServicePtr.Db.
 		From(CATEGORY_DB).
 		Where(
 			goqu.C("id").Eq(id),
@@ -56,35 +56,10 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID) (
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUID) ([]models.Category, error) {
+func (categoryServicePtr *CategoryService) GetCategoryByNames(categories []string) ([]models.Category, error) {
 	var category []models.Category
 
-	err := CategoryRepositoryPtr.Db.
-		From(CATEGORY_DB).
-		Where(
-			goqu.C("id").In(ids),
-			goqu.C("deleted_at").IsNull(),
-		).
-		Select(
-			"id",
-			"name",
-			"created_at",
-			"updated_at",
-			"deleted_at",
-		).
-		ScanStructs(&category)
-
-	if err != nil {
-		return category, err
-	}
-
-	return category, nil
-}
-
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories []string) ([]models.Category, error) {
-	var category []models.Category
-
-	found, err := CategoryRepositoryPtr.Db.
+	found, err := categoryServicePtr.Db.
 		From(CATEGORY_DB).
 		Where(
 			goqu.C("name").In(categories),
@@ -110,7 +85,7 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories [
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
+func (categoryServicePtr *CategoryService) CreateCategory(
 	category models.Category,
 ) (models.Category, error) {
 
@@ -119,7 +94,7 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 		return category, err
 	}
 
-	_, err = CategoryRepositoryPtr.Db.
+	_, err = categoryServicePtr.Db.
 		Insert(CATEGORY_DB).
 		Rows(
 			goqu.Record{
@@ -134,15 +109,15 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 		return category, err
 	}
 
-	return CategoryRepositoryPtr.GetCategoryById(id)
+	return categoryServicePtr.GetCategoryById(id)
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) UpdateCategory(
+func (categoryServicePtr *CategoryService) UpdateCategory(
 	id uuid.UUID,
 	preUpdateCategory models.Category,
 ) (models.Category, error) {
 
-	_, err := CategoryRepositoryPtr.Db.
+	_, err := categoryServicePtr.Db.
 		Update(CATEGORY_DB).
 		Set(
 			goqu.Record{
@@ -161,11 +136,11 @@ func (CategoryRepositoryPtr *CategoryRepository) UpdateCategory(
 		return preUpdateCategory, err
 	}
 
-	return CategoryRepositoryPtr.GetCategoryById(id)
+	return categoryServicePtr.GetCategoryById(id)
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(id uuid.UUID) error {
-	_, err := CategoryRepositoryPtr.Db.
+func (categoryServicePtr *CategoryService) DeleteCategory(id uuid.UUID) error {
+	_, err := categoryServicePtr.Db.
 		Update(CATEGORY_DB).
 		Set(
 			goqu.Record{
