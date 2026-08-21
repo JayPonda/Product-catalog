@@ -5,8 +5,9 @@ import (
 
 	"github.com/JayPonda/Product-catalog/server/src/services"
 	v1 "github.com/JayPonda/Product-catalog/server/src/structs/v1"
-	"github.com/gofiber/fiber/v3"
+	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +19,7 @@ type ProductController struct {
 func NewProductController(service *services.ProductService) *ProductController {
 	return &ProductController{
 		Service:   service,
-		Validator: validator.New(),
+		Validator: utils.NewValidator(),
 	}
 }
 
@@ -66,13 +67,14 @@ func (pc *ProductController) ListProducts(ctx fiber.Ctx) error {
 
 // CreateProduct godoc
 // @Summary      Create a product
-// @Description  Create a new product with categories
+// @Description  Create a new product. Categories are linked separately via the link route.
 // @Tags         products
 // @Accept       json
 // @Produce      json
 // @Param        product  body      v1.RequestProduct  true  "Product payload"
 // @Success      201      {object}  v1.ResponseProduct
 // @Failure      400      {object}  map[string]string
+// @Failure      409      {object}  map[string]string
 // @Failure      500      {object}  map[string]string
 // @Router       /products [post]
 func (pc *ProductController) CreateProduct(ctx fiber.Ctx) error {
@@ -94,12 +96,7 @@ func (pc *ProductController) CreateProduct(ctx fiber.Ctx) error {
 
 	product, err := pc.Service.CreateProduct(req)
 	if err != nil {
-		if errors.Is(err, services.ErrCategoryNotModifiable) {
-			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		if errors.Is(err, services.ErrDuplicateProductName) || errors.Is(err, services.ErrDuplicateCategoryName) {
+		if errors.Is(err, services.ErrDuplicateProductName) {
 			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": err.Error(),
 			})
@@ -164,7 +161,7 @@ func (pc *ProductController) GetProductByName(ctx fiber.Ctx) error {
 
 // UpdateProduct godoc
 // @Summary      Update a product
-// @Description  Update a product and its categories
+// @Description  Update a product's own fields. Categories are managed via link/unlink routes.
 // @Tags         products
 // @Accept       json
 // @Produce      json
@@ -172,6 +169,8 @@ func (pc *ProductController) GetProductByName(ctx fiber.Ctx) error {
 // @Param        product  body      v1.RequestProduct   true  "Product payload"
 // @Success      200      {object}  v1.ResponseProduct
 // @Failure      400      {object}  map[string]string
+// @Failure      404      {object}  map[string]string
+// @Failure      409      {object}  map[string]string
 // @Failure      500      {object}  map[string]string
 // @Router       /products/{id} [put]
 func (pc *ProductController) UpdateProduct(ctx fiber.Ctx) error {
@@ -200,13 +199,112 @@ func (pc *ProductController) UpdateProduct(ctx fiber.Ctx) error {
 
 	product, err := pc.Service.UpdateProduct(id, req)
 	if err != nil {
-		if errors.Is(err, services.ErrCategoryNotModifiable) {
-			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		if errors.Is(err, services.ErrDuplicateProductName) {
+			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		if errors.Is(err, services.ErrDuplicateProductName) || errors.Is(err, services.ErrDuplicateCategoryName) {
-			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return ctx.JSON(product)
+}
+
+// LinkCategory godoc
+// @Summary      Link a category to a product
+// @Description  Link an existing category to a product. One category per call.
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Param        id       path      string                    true  "Product ID"
+// @Param        payload  body      v1.LinkCategoryRequest    true  "Category to link"
+// @Success      200      {object}  v1.ResponseProduct
+// @Failure      400      {object}  map[string]string
+// @Failure      404      {object}  map[string]string
+// @Failure      500      {object}  map[string]string
+// @Router       /products/{id}/categories/link [post]
+func (pc *ProductController) LinkCategory(ctx fiber.Ctx) error {
+	id, err := uuid.Parse(ctx.Params("id"))
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid product id",
+		})
+	}
+
+	var req v1.LinkCategoryRequest
+
+	if err := ctx.Bind().JSON(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "invalid request body",
+			"details": err.Error(),
+		})
+	}
+
+	if err := pc.Validator.Struct(req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "validation failed",
+			"details": err.Error(),
+		})
+	}
+
+	product, err := pc.Service.LinkCategory(id, req.CategoryID)
+	if err != nil {
+		if errors.Is(err, services.ErrProductNotFound) || errors.Is(err, services.ErrCategoryNotFound) {
+			return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return ctx.JSON(product)
+}
+
+// UnlinkCategory godoc
+// @Summary      Unlink a category from a product
+// @Description  Remove a category link from a product. One category per call.
+// @Tags         products
+// @Accept       json
+// @Produce      json
+// @Param        id       path      string                    true  "Product ID"
+// @Param        payload  body      v1.LinkCategoryRequest    true  "Category to unlink"
+// @Success      200      {object}  v1.ResponseProduct
+// @Failure      400      {object}  map[string]string
+// @Failure      404      {object}  map[string]string
+// @Failure      500      {object}  map[string]string
+// @Router       /products/{id}/categories/unlink [post]
+func (pc *ProductController) UnlinkCategory(ctx fiber.Ctx) error {
+	id, err := uuid.Parse(ctx.Params("id"))
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid product id",
+		})
+	}
+
+	var req v1.LinkCategoryRequest
+
+	if err := ctx.Bind().JSON(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "invalid request body",
+			"details": err.Error(),
+		})
+	}
+
+	if err := pc.Validator.Struct(req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "validation failed",
+			"details": err.Error(),
+		})
+	}
+
+	product, err := pc.Service.UnlinkCategory(id, req.CategoryID)
+	if err != nil {
+		if errors.Is(err, services.ErrProductNotFound) || errors.Is(err, services.ErrCategoryNotFound) {
+			return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}

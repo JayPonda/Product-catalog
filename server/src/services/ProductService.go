@@ -149,56 +149,6 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 	return response, nil
 }
 
-func (productServicePtr *ProductService) resolveCategoryIDs(tx *goqu.TxDatabase, category *v1.RequestCategories) ([]uuid.UUID, bool, error) {
-	if category == nil {
-		return nil, false, nil
-	}
-	var categoryIDs []uuid.UUID
-
-	if len(category.Old) > 0 {
-		var names []string
-		for _, cat := range category.Old {
-			names = append(names, cat.Name)
-		}
-
-		existingCats, err := productServicePtr.CategoryManager.GetCategoryByNames(names, tx)
-		if err != nil {
-			return nil, false, err
-		}
-
-		found := make(map[string]struct{}, len(existingCats))
-		for _, cat := range existingCats {
-			found[cat.Name] = struct{}{}
-		}
-
-		for _, name := range names {
-			if _, ok := found[utils.NormalizeName(name)]; !ok {
-				return nil, false, ErrCategoryNotModifiable
-			}
-		}
-
-		for _, cat := range existingCats {
-			categoryIDs = append(categoryIDs, cat.ID)
-		}
-	}
-
-	for _, name := range category.New {
-		newCat, err := productServicePtr.CategoryManager.CreateCategory(
-			models.Category{Name: name},
-			tx,
-		)
-		if err != nil {
-			if IsDuplicateCategoryName(err) {
-				return nil, false, ErrDuplicateCategoryName
-			}
-			return nil, false, err
-		}
-		categoryIDs = append(categoryIDs, newCat.ID)
-	}
-
-	return categoryIDs, true, nil
-}
-
 func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct) (v1.ResponseProduct, error) {
 	_, err := productServicePtr.ProductManager.GetProductByName(product.Name)
 	if err == nil {
@@ -226,22 +176,6 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 			return v1.ResponseProduct{}, ErrDuplicateProductName
 		}
 		return v1.ResponseProduct{}, err
-	}
-
-	var categoryIDs []uuid.UUID
-
-	categoryIDs, hasCategories, err := productServicePtr.resolveCategoryIDs(tx, product.Category)
-	if err != nil {
-		return v1.ResponseProduct{}, err
-	}
-
-	if hasCategories {
-		err = productServicePtr.ProductCategoryManager.SetProductCategories(
-			dbProduct.ID, categoryIDs, tx,
-		)
-		if err != nil {
-			return v1.ResponseProduct{}, err
-		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -280,23 +214,84 @@ func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.
 		return v1.ResponseProduct{}, err
 	}
 
-	categoryIDs, hasCategories, err := productServicePtr.resolveCategoryIDs(tx, product.Category)
-	if err != nil {
-		return v1.ResponseProduct{}, err
-	}
-
-	if hasCategories {
-		err = productServicePtr.ProductCategoryManager.SetProductCategories(id, categoryIDs, tx)
-		if err != nil {
-			return v1.ResponseProduct{}, err
-		}
-	}
-
 	if err := tx.Commit(); err != nil {
 		return v1.ResponseProduct{}, err
 	}
 
 	return productServicePtr.GetProductById(id)
+}
+
+// LinkCategory links an existing category to a product.
+// Categories are created separately via the category routes.
+func (productServicePtr *ProductService) LinkCategory(productID uuid.UUID, categoryID uuid.UUID) (v1.ResponseProduct, error) {
+	var response v1.ResponseProduct
+
+	if _, err := productServicePtr.ProductManager.GetProductById(productID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response, ErrProductNotFound
+		}
+		return response, err
+	}
+
+	if _, err := productServicePtr.CategoryManager.GetCategoryById(categoryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response, ErrCategoryNotFound
+		}
+		return response, err
+	}
+
+	tx, err := productServicePtr.Db.Begin()
+	if err != nil {
+		return response, err
+	}
+
+	defer tx.Rollback()
+
+	if err := productServicePtr.ProductCategoryManager.LinkCategory(productID, categoryID, tx); err != nil {
+		return response, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return response, err
+	}
+
+	return productServicePtr.GetProductById(productID)
+}
+
+// UnlinkCategory removes a category link from a product.
+func (productServicePtr *ProductService) UnlinkCategory(productID uuid.UUID, categoryID uuid.UUID) (v1.ResponseProduct, error) {
+	var response v1.ResponseProduct
+
+	if _, err := productServicePtr.ProductManager.GetProductById(productID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response, ErrProductNotFound
+		}
+		return response, err
+	}
+
+	if _, err := productServicePtr.CategoryManager.GetCategoryById(categoryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response, ErrCategoryNotFound
+		}
+		return response, err
+	}
+
+	tx, err := productServicePtr.Db.Begin()
+	if err != nil {
+		return response, err
+	}
+
+	defer tx.Rollback()
+
+	if err := productServicePtr.ProductCategoryManager.UnlinkCategory(productID, categoryID, tx); err != nil {
+		return response, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return response, err
+	}
+
+	return productServicePtr.GetProductById(productID)
 }
 
 func (productServicePtr *ProductService) DeleteProduct(id uuid.UUID) error {

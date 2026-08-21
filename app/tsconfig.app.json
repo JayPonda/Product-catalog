@@ -6,6 +6,10 @@
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,
 
+    // Allow importing plain-JS modules (e.g. src/network/request.js) and
+    // <script setup> blocks without lang="ts" from TypeScript files.
+    "allowJs": true,
+
     // Path mapping for cleaner imports.
     "paths": {
       "@/*": ["./src/*"]

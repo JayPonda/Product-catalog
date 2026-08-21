@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/repositories"
+	v1 "github.com/JayPonda/Product-catalog/server/src/structs/v1"
 	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/google/uuid"
 )
@@ -30,8 +31,27 @@ func (categoryServicePtr *CategoryService) GetCategoryByNames(names []string) ([
 	return categoryServicePtr.CategoryManager.GetCategoryByNames(names)
 }
 
+func (categoryServicePtr *CategoryService) ListCategories(limit int, offset int) (v1.ListCategoriesResponse, error) {
+	var response v1.ListCategoriesResponse
+
+	categories, total, err := categoryServicePtr.CategoryManager.GetCategories(limit, offset)
+	if err != nil {
+		return response, err
+	}
+
+	response.Categories = categories
+	response.Total = total
+	response.Limit = limit
+	response.Offset = offset
+
+	return response, nil
+}
+
 func (categoryServicePtr *CategoryService) MatchCategories(prefix string, limit int) ([]models.Category, error) {
-	return categoryServicePtr.CategoryManager.MatchCategoriesByName(prefix, limit)
+	var result, err = categoryServicePtr.CategoryManager.MatchCategoriesByName(prefix, limit)
+
+	return result, err
+
 }
 
 func (categoryServicePtr *CategoryService) CreateCategory(

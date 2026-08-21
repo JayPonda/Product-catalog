@@ -24,46 +24,27 @@
 
       <!-- Desktop navigation -->
       <div class="hidden items-center gap-8 md:flex">
-        <RouterLink
-        v-if="props.isLoggedIn"
-          to="/my-products"
-          class="text-sm font-medium text-emerald-50 transition hover:text-white"
-        >
-          My Products
-        </RouterLink>
 
         <RouterLink
+          to="/products/"
+          active-class="text-white underline underline-offset-4"
+          class="text-sm font-medium text-emerald-50 transition hover:text-white"
+        >
+          Products
+        </RouterLink>
+        <RouterLink
           to="/categories"
+          active-class="text-white underline underline-offset-4"
           class="text-sm font-medium text-emerald-50 transition hover:text-white"
         >
           Categories
         </RouterLink>
+
       </div>
 
       <!-- Desktop actions -->
       <div class="hidden items-center gap-3 md:flex">
-        <RouterLink
-          v-if="!props.isLoggedIn"
-          to="/login"
-          class="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
-        >
-          Log in
-        </RouterLink>
-        <RouterLink
-          v-else
-          to="/logout"
-          class="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
-        >
-          Log out
-        </RouterLink>
 
-        <RouterLink
-          to="/"
-          class="flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50"
-        >
-          Browse products
-          <ArrowRight class="size-4" />
-        </RouterLink>
       </div>
 
       <!-- Mobile menu button -->
@@ -91,17 +72,19 @@
       class="border-t border-emerald-600 bg-emerald-700 px-4 py-4 md:hidden"
     >
       <div class="mx-auto max-w-7xl space-y-1">
+
         <RouterLink
-          v-if="props.isLoggedIn"
-          to="/my-products"
+          to="/products"
+          active-class="bg-emerald-600 text-white"
           class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
           @click="mobileMenuOpen = false"
         >
-          My Products
+          Products
         </RouterLink>
 
         <RouterLink
           to="/categories"
+          active-class="bg-emerald-600 text-white"
           class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
           @click="mobileMenuOpen = false"
         >
@@ -110,37 +93,12 @@
 
         <div class="my-2 border-t border-emerald-600" />
 
-        <RouterLink
-          v-if="!props.isLoggedIn"
-          to="/login"
-          class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
-          @click="mobileMenuOpen = false"
-        >
-          Log in
-        </RouterLink>
-        <RouterLink
-          v-else
-          to="/logout"
-          class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
-          @click="mobileMenuOpen = false"
-        >
-          Log out
-        </RouterLink>
-
-        <RouterLink
-          to="/"
-          class="mt-2 flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700"
-          @click="mobileMenuOpen = false"
-        >
-          Browse products
-          <ArrowRight class="size-4" />
-        </RouterLink>
       </div>
     </div>
   </header>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import {

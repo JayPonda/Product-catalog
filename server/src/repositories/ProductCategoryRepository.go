@@ -90,94 +90,115 @@ func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
 	return productCategories, nil
 }
 
-// SetProductCategories makes the product-category relationships match
-// the supplied category IDs.
-//
-// Existing relationships are kept.
-// New relationships are created.
-// Relationships that are no longer present are soft deleted.
-func (repository *ProductCategoryRepository) SetProductCategories(
+// GetProductCategory returns the link row for a product-category pair,
+// regardless of whether it is currently active.
+func (repository *ProductCategoryRepository) GetProductCategory(
 	productID uuid.UUID,
-	categoryIDs []uuid.UUID,
+	categoryID uuid.UUID,
 	exec ...utils.Executor,
-) error {
+) (models.ProductCategory, bool, error) {
+	var productCategory models.ProductCategory
 
 	db := utils.ResolveExecutor(repository.Db, exec)
 
-	// Get current relationships.
-	currentRelations, err := repository.GetCategoriesByProduct(productID, exec...)
+	found, err := db.
+		From(PRODUCT_CATEGORY_DB).
+		Where(
+			goqu.C("product_id").Eq(productID),
+			goqu.C("category_id").Eq(categoryID),
+		).
+		Select(
+			"id",
+			"product_id",
+			"category_id",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStruct(&productCategory)
+
+	if err != nil || !found {
+		return models.ProductCategory{}, false, err
+	}
+
+	return productCategory, true, nil
+}
+
+// LinkCategory creates a product-category relationship.
+// A previously soft-deleted relationship is reactivated.
+func (repository *ProductCategoryRepository) LinkCategory(
+	productID uuid.UUID,
+	categoryID uuid.UUID,
+	exec ...utils.Executor,
+) error {
+	db := utils.ResolveExecutor(repository.Db, exec)
+
+	existing, found, err := repository.GetProductCategory(productID, categoryID, exec...)
 	if err != nil {
 		return err
 	}
 
-	// Build a lookup of the incoming category IDs.
-	desiredCategories := make(map[uuid.UUID]struct{}, len(categoryIDs))
-
-	for _, categoryID := range categoryIDs {
-		desiredCategories[categoryID] = struct{}{}
+	if found {
+		if existing.DeletedAt.Valid {
+			_, err = db.
+				Update(PRODUCT_CATEGORY_DB).
+				Set(
+					goqu.Record{
+						"deleted_at": nil,
+						"updated_at": time.Now(),
+					},
+				).
+				Where(goqu.C("id").Eq(existing.ID)).
+				Executor().
+				Exec()
+		}
+		return err
 	}
 
-	// Build a lookup of the currently active relationships.
-	currentCategories := make(map[uuid.UUID]models.ProductCategory, len(currentRelations))
-
-	for _, relation := range currentRelations {
-		currentCategories[relation.CategoryID] = relation
+	id, err := utils.GetUUID()
+	if err != nil {
+		return err
 	}
 
-	// Create relationships that don't currently exist.
-	for categoryID := range desiredCategories {
-		if _, exists := currentCategories[categoryID]; exists {
-			continue
-		}
+	_, err = db.
+		Insert(PRODUCT_CATEGORY_DB).
+		Rows(
+			goqu.Record{
+				"id":          id,
+				"product_id":  productID,
+				"category_id": categoryID,
+			},
+		).
+		Executor().
+		Exec()
 
-		id, err := utils.GetUUID()
-		if err != nil {
-			return err
-		}
+	return err
+}
 
-		_, err = db.
-			Insert(PRODUCT_CATEGORY_DB).
-			Rows(
-				goqu.Record{
-					"id":          id,
-					"product_id":  productID,
-					"category_id": categoryID,
-				},
-			).
-			Executor().
-			Exec()
+// UnlinkCategory soft deletes an active product-category relationship.
+func (repository *ProductCategoryRepository) UnlinkCategory(
+	productID uuid.UUID,
+	categoryID uuid.UUID,
+	exec ...utils.Executor,
+) error {
+	db := utils.ResolveExecutor(repository.Db, exec)
 
-		if err != nil {
-			return err
-		}
-	}
+	_, err := db.
+		Update(PRODUCT_CATEGORY_DB).
+		Set(
+			goqu.Record{
+				"deleted_at": time.Now(),
+			},
+		).
+		Where(
+			goqu.C("product_id").Eq(productID),
+			goqu.C("category_id").Eq(categoryID),
+			goqu.C("deleted_at").IsNull(),
+		).
+		Executor().
+		Exec()
 
-	// Soft delete relationships that are no longer desired.
-	for categoryID, relation := range currentCategories {
-		if _, exists := desiredCategories[categoryID]; exists {
-			continue
-		}
-
-		_, err := db.
-			Update(PRODUCT_CATEGORY_DB).
-			Set(
-				goqu.Record{
-					"deleted_at": time.Now(),
-				},
-			).
-			Where(
-				goqu.C("id").Eq(relation.ID),
-				goqu.C("deleted_at").IsNull(),
-			).
-			Executor().
-			Exec()
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return err
 }
 
 // DeleteProductCategories soft deletes all category relationships

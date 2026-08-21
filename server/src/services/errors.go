@@ -9,7 +9,8 @@ import (
 var ErrDuplicateProductName = errors.New("product with this name already exists")
 var ErrDuplicateCategoryName = errors.New("category with this name already exists")
 var ErrEmptyCategoryName = errors.New("category name cannot be empty")
-var ErrCategoryNotModifiable = errors.New("categories can't be modified. Please create a new category instead.")
+var ErrProductNotFound = errors.New("product not found")
+var ErrCategoryNotFound = errors.New("category not found")
 
 const uqProductsNameActive = "uq_products_name_active"
 const uqCategoriesNameActive = "uq_categories_name_active"

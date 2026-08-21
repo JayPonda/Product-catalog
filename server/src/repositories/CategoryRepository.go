@@ -120,6 +120,49 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories [
 	return category, nil
 }
 
+func (CategoryRepositoryPtr *CategoryRepository) GetCategories(limit int, offset int, exec ...utils.Executor) ([]models.Category, int64, error) {
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	var categories []models.Category
+
+	err := db.
+		From(CATEGORY_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+		).
+		Order(goqu.I("name").Asc()).
+		Limit(uint(limit)).
+		Offset(uint(offset)).
+		Select(
+			"id",
+			"name",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStructs(&categories)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int64
+
+	_, err = db.
+		From(CATEGORY_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+		).
+		Select(goqu.COUNT("*")).
+		ScanVal(&total)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return categories, total, nil
+}
+
 func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 	category models.Category,
 	exec ...utils.Executor,
@@ -151,7 +194,8 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 }
 
 func (CategoryRepositoryPtr *CategoryRepository) MatchCategoriesByName(prefix string, limit int, exec ...utils.Executor) ([]models.Category, error) {
-	var categories []models.Category
+	// initialized (not nil) so zero matches marshal to [] instead of null
+	categories := []models.Category{}
 
 	escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	pattern := escaper.Replace(utils.NormalizeName(prefix)) + "%"

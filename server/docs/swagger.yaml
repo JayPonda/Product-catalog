@@ -20,6 +20,26 @@ definitions:
         description: Valid is true if Time is not NULL
         type: boolean
     type: object
+  structsv1.LinkCategoryRequest:
+    properties:
+      category_id:
+        type: string
+    required:
+    - category_id
+    type: object
+  structsv1.ListCategoriesResponse:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/models.Category'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
   structsv1.ListProductsResponse:
     properties:
       limit:
@@ -40,31 +60,30 @@ definitions:
           $ref: '#/definitions/models.Category'
         type: array
     type: object
-  structsv1.RequestCategories:
+  structsv1.RequestCategory:
     properties:
-      new_categories:
-        items:
-          type: string
-        type: array
-      old_categories:
-        items:
-          $ref: '#/definitions/models.Category'
-        type: array
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+    required:
+    - name
     type: object
   structsv1.RequestProduct:
     properties:
-      category:
-        $ref: '#/definitions/structsv1.RequestCategories'
       description:
+        maxLength: 150
         type: string
       name:
-        maxLength: 255
+        maxLength: 50
         minLength: 1
         type: string
       price:
+        maximum: 999999999
         type: integer
       stock_quantity:
-        minimum: 0
+        maximum: 2147483647
+        minimum: 1
         type: integer
     required:
     - description
@@ -97,6 +116,81 @@ definitions:
 info:
   contact: {}
 paths:
+  /categories:
+    get:
+      description: List categories with pagination, alphabetical by name
+      parameters:
+      - default: 20
+        description: Page size (20|50|100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ListCategoriesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List categories
+      tags:
+      - categories
+    post:
+      consumes:
+      - application/json
+      description: Create a new category. This is the only way categories are created.
+      parameters:
+      - description: Category payload
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/structsv1.RequestCategory'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Category'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a category
+      tags:
+      - categories
   /categories/match:
     get:
       description: List active categories whose name starts with the given prefix
@@ -107,7 +201,7 @@ paths:
         name: name
         type: string
       - default: 10
-        description: Max results (1-100)
+        description: Max results (5|10|20)
         in: query
         name: limit
         type: integer
@@ -172,7 +266,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new product with categories
+      description: Create a new product. Categories are linked separately via the
+        link route.
       parameters:
       - description: Product payload
         in: body
@@ -189,6 +284,12 @@ paths:
             $ref: '#/definitions/structsv1.ResponseProduct'
         "400":
           description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
           schema:
             additionalProperties:
               type: string
@@ -262,7 +363,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Update a product and its categories
+      description: Update a product's own fields. Categories are managed via link/unlink
+        routes.
       parameters:
       - description: Product ID
         in: path
@@ -288,6 +390,18 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal Server Error
           schema:
@@ -295,6 +409,96 @@ paths:
               type: string
             type: object
       summary: Update a product
+      tags:
+      - products
+  /products/{id}/categories/link:
+    post:
+      consumes:
+      - application/json
+      description: Link an existing category to a product. One category per call.
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category to link
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/structsv1.LinkCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Link a category to a product
+      tags:
+      - products
+  /products/{id}/categories/unlink:
+    post:
+      consumes:
+      - application/json
+      description: Remove a category link from a product. One category per call.
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category to unlink
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/structsv1.LinkCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Unlink a category from a product
       tags:
       - products
   /products/name/{name}:
