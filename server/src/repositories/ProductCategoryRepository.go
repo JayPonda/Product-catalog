@@ -30,13 +30,47 @@ func InitProductCategoryRepository(
 // for a product.
 func (repository *ProductCategoryRepository) GetCategoriesByProduct(
 	productID uuid.UUID,
+	exec ...utils.Executor,
 ) ([]models.ProductCategory, error) {
 	var productCategories []models.ProductCategory
 
-	err := repository.Db.
+	db := utils.ResolveExecutor(repository.Db, exec)
+
+	err := db.
 		From(PRODUCT_CATEGORY_DB).
 		Where(
 			goqu.C("product_id").Eq(productID),
+			goqu.C("deleted_at").IsNull(),
+		).
+		Select(
+			"id",
+			"product_id",
+			"category_id",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStructs(&productCategories)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return productCategories, nil
+}
+
+func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
+	productIDs []uuid.UUID,
+	exec ...utils.Executor,
+) ([]models.ProductCategory, error) {
+	var productCategories []models.ProductCategory
+
+	db := utils.ResolveExecutor(repository.Db, exec)
+
+	err := db.
+		From(PRODUCT_CATEGORY_DB).
+		Where(
+			goqu.C("product_id").In(productIDs),
 			goqu.C("deleted_at").IsNull(),
 		).
 		Select(
@@ -65,10 +99,13 @@ func (repository *ProductCategoryRepository) GetCategoriesByProduct(
 func (repository *ProductCategoryRepository) SetProductCategories(
 	productID uuid.UUID,
 	categoryIDs []uuid.UUID,
+	exec ...utils.Executor,
 ) error {
 
+	db := utils.ResolveExecutor(repository.Db, exec)
+
 	// Get current relationships.
-	currentRelations, err := repository.GetCategoriesByProduct(productID)
+	currentRelations, err := repository.GetCategoriesByProduct(productID, exec...)
 	if err != nil {
 		return err
 	}
@@ -98,7 +135,7 @@ func (repository *ProductCategoryRepository) SetProductCategories(
 			return err
 		}
 
-		_, err = repository.Db.
+		_, err = db.
 			Insert(PRODUCT_CATEGORY_DB).
 			Rows(
 				goqu.Record{
@@ -121,7 +158,7 @@ func (repository *ProductCategoryRepository) SetProductCategories(
 			continue
 		}
 
-		_, err := repository.Db.
+		_, err := db.
 			Update(PRODUCT_CATEGORY_DB).
 			Set(
 				goqu.Record{
@@ -147,8 +184,11 @@ func (repository *ProductCategoryRepository) SetProductCategories(
 // belonging to a product.
 func (repository *ProductCategoryRepository) DeleteProductCategories(
 	productID uuid.UUID,
+	exec ...utils.Executor,
 ) error {
-	_, err := repository.Db.
+	db := utils.ResolveExecutor(repository.Db, exec)
+
+	_, err := db.
 		Update(PRODUCT_CATEGORY_DB).
 		Set(
 			goqu.Record{

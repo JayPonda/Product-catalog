@@ -1,6 +1,9 @@
 package services
 
 import (
+	"database/sql"
+	"errors"
+
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/repositories"
 	v1 "github.com/JayPonda/Product-catalog/server/src/structs/v1"
@@ -50,39 +53,161 @@ func (productServicePtr *ProductService) getProductsCategory(id uuid.UUID) ([]mo
 	return categories, nil
 }
 
-func (productServicePtr *ProductService) GetProductById(id uuid.UUID) (v1.BareProduct, error) {
-	var bareProduct v1.BareProduct
+func (productServicePtr *ProductService) GetProductById(id uuid.UUID) (v1.ResponseProduct, error) {
+	var responseProduct v1.ResponseProduct
 	products, err := productServicePtr.ProductManager.GetProductById(id)
 
 	if err != nil {
-		return bareProduct, err
+		return responseProduct, err
 	}
 
 	categories, err := productServicePtr.getProductsCategory(id)
 
-	bareProduct.Product = products
-	bareProduct.Categories = categories
-	return bareProduct, nil
+	responseProduct.Product = products
+	responseProduct.Categories = categories
+	return responseProduct, nil
 }
 
-func (productServicePtr *ProductService) GetProductByName(name string) (v1.BareProduct, error) {
+func (productServicePtr *ProductService) GetProductByName(name string) (v1.ResponseProduct, error) {
 
-	var bareProduct v1.BareProduct
+	var responseProduct v1.ResponseProduct
 	products, err := productServicePtr.ProductManager.GetProductByName(name)
 
 	if err != nil {
-		return bareProduct, err
+		return responseProduct, err
 	}
 
 	categories, err := productServicePtr.getProductsCategory(products.ID)
 
-	bareProduct.Product = products
-	bareProduct.Categories = categories
-	return bareProduct, nil
+	responseProduct.Product = products
+	responseProduct.Categories = categories
+	return responseProduct, nil
 
 }
 
+func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1.ListProductsResponse, error) {
+	var response v1.ListProductsResponse
+
+	products, total, err := productServicePtr.ProductManager.GetProducts(limit, offset)
+	if err != nil {
+		return response, err
+	}
+
+	productIDs := make([]uuid.UUID, 0, len(products))
+	for _, product := range products {
+		productIDs = append(productIDs, product.ID)
+	}
+
+	categoriesByProduct := make(map[uuid.UUID][]models.Category, len(products))
+
+	if len(productIDs) > 0 {
+		links, err := productServicePtr.ProductCategoryManager.GetCategoriesByProductIds(productIDs)
+		if err != nil {
+			return response, err
+		}
+
+		categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
+		for _, link := range links {
+			categoryIDSet[link.CategoryID] = struct{}{}
+		}
+
+		categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
+		for categoryID := range categoryIDSet {
+			categoryIDs = append(categoryIDs, categoryID)
+		}
+
+		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(categoryIDs)
+		if err != nil {
+			return response, err
+		}
+
+		categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
+		for _, category := range categories {
+			categoriesByID[category.ID] = category
+		}
+
+		for _, link := range links {
+			if category, ok := categoriesByID[link.CategoryID]; ok {
+				categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+			}
+		}
+	}
+
+	items := make([]v1.ResponseProduct, 0, len(products))
+	for _, product := range products {
+		items = append(items, v1.ResponseProduct{
+			Product:    product,
+			Categories: categoriesByProduct[product.ID],
+		})
+	}
+
+	response.Products = items
+	response.Total = total
+	response.Limit = limit
+	response.Offset = offset
+
+	return response, nil
+}
+
+func (productServicePtr *ProductService) resolveCategoryIDs(tx *goqu.TxDatabase, category *v1.RequestCategories) ([]uuid.UUID, bool, error) {
+	if category == nil {
+		return nil, false, nil
+	}
+	var categoryIDs []uuid.UUID
+
+	if len(category.Old) > 0 {
+		var names []string
+		for _, cat := range category.Old {
+			names = append(names, cat.Name)
+		}
+
+		existingCats, err := productServicePtr.CategoryManager.GetCategoryByNames(names, tx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		found := make(map[string]struct{}, len(existingCats))
+		for _, cat := range existingCats {
+			found[cat.Name] = struct{}{}
+		}
+
+		for _, name := range names {
+			if _, ok := found[utils.NormalizeName(name)]; !ok {
+				return nil, false, ErrCategoryNotModifiable
+			}
+		}
+
+		for _, cat := range existingCats {
+			categoryIDs = append(categoryIDs, cat.ID)
+		}
+	}
+
+	for _, name := range category.New {
+		newCat, err := productServicePtr.CategoryManager.CreateCategory(
+			models.Category{Name: name},
+			tx,
+		)
+		if err != nil {
+			if IsDuplicateCategoryName(err) {
+				return nil, false, ErrDuplicateCategoryName
+			}
+			return nil, false, err
+		}
+		categoryIDs = append(categoryIDs, newCat.ID)
+	}
+
+	return categoryIDs, true, nil
+}
+
 func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct) (v1.ResponseProduct, error) {
+	_, err := productServicePtr.ProductManager.GetProductByName(product.Name)
+	if err == nil {
+		return v1.ResponseProduct{}, ErrDuplicateProductName
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return v1.ResponseProduct{}, err
+	}
+
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
 		return v1.ResponseProduct{}, err
@@ -95,69 +220,49 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 		Description:   product.Description,
 		Price:         product.Price,
 		StockQuantity: product.StockQuantity,
-	})
+	}, tx)
 	if err != nil {
+		if IsDuplicateProductName(err) {
+			return v1.ResponseProduct{}, ErrDuplicateProductName
+		}
 		return v1.ResponseProduct{}, err
 	}
 
 	var categoryIDs []uuid.UUID
 
-	if len(product.Category.Old) > 0 {
-		var names []string
-		for _, cat := range product.Category.Old {
-			names = append(names, cat.Name)
-		}
-		existingCats, err := productServicePtr.CategoryManager.GetCategoryByNames(names)
-		if err != nil {
-			return v1.ResponseProduct{}, err
-		}
-		for _, cat := range existingCats {
-			categoryIDs = append(categoryIDs, cat.ID)
-		}
+	categoryIDs, hasCategories, err := productServicePtr.resolveCategoryIDs(tx, product.Category)
+	if err != nil {
+		return v1.ResponseProduct{}, err
 	}
 
-	for _, name := range product.Category.New {
-		newCat, err := productServicePtr.CategoryManager.CreateCategory(
-			models.Category{Name: name},
+	if hasCategories {
+		err = productServicePtr.ProductCategoryManager.SetProductCategories(
+			dbProduct.ID, categoryIDs, tx,
 		)
 		if err != nil {
 			return v1.ResponseProduct{}, err
 		}
-		categoryIDs = append(categoryIDs, newCat.ID)
-	}
-
-	err = productServicePtr.ProductCategoryManager.SetProductCategories(
-		dbProduct.ID, categoryIDs,
-	)
-	if err != nil {
-		return v1.ResponseProduct{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return v1.ResponseProduct{}, err
 	}
 
-	bareProduct, err := productServicePtr.GetProductById(dbProduct.ID)
-	if err != nil {
+	return productServicePtr.GetProductById(dbProduct.ID)
+}
+
+func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.RequestProduct) (v1.ResponseProduct, error) {
+	existing, err := productServicePtr.ProductManager.GetProductByName(product.Name)
+	if err == nil && existing.ID != id {
+		return v1.ResponseProduct{}, ErrDuplicateProductName
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return v1.ResponseProduct{}, err
 	}
 
-	return v1.ResponseProduct{
-		ID:            bareProduct.ID,
-		Name:          bareProduct.Name,
-		Description:   bareProduct.Description,
-		Price:         bareProduct.Price,
-		StockQuantity: bareProduct.StockQuantity,
-		CreatedAt:     bareProduct.CreatedAt,
-		UpdatedAt:     bareProduct.UpdatedAt,
-		DeletedAt:     bareProduct.DeletedAt,
-	}, nil
-}
-
-func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.RequestProduct) (v1.BareProduct, error) {
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
-		return v1.BareProduct{}, err
+		return v1.ResponseProduct{}, err
 	}
 
 	defer tx.Rollback()
@@ -167,44 +272,28 @@ func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.
 		Description:   product.Description,
 		Price:         product.Price,
 		StockQuantity: product.StockQuantity,
-	})
+	}, tx)
 	if err != nil {
-		return v1.BareProduct{}, err
+		if IsDuplicateProductName(err) {
+			return v1.ResponseProduct{}, ErrDuplicateProductName
+		}
+		return v1.ResponseProduct{}, err
 	}
 
-	var categoryIDs []uuid.UUID
-
-	if len(product.Category.Old) > 0 {
-		var names []string
-		for _, cat := range product.Category.Old {
-			names = append(names, cat.Name)
-		}
-		existingCats, err := productServicePtr.CategoryManager.GetCategoryByNames(names)
-		if err != nil {
-			return v1.BareProduct{}, err
-		}
-		for _, cat := range existingCats {
-			categoryIDs = append(categoryIDs, cat.ID)
-		}
-	}
-
-	for _, name := range product.Category.New {
-		newCat, err := productServicePtr.CategoryManager.CreateCategory(
-			models.Category{Name: name},
-		)
-		if err != nil {
-			return v1.BareProduct{}, err
-		}
-		categoryIDs = append(categoryIDs, newCat.ID)
-	}
-
-	err = productServicePtr.ProductCategoryManager.SetProductCategories(id, categoryIDs)
+	categoryIDs, hasCategories, err := productServicePtr.resolveCategoryIDs(tx, product.Category)
 	if err != nil {
-		return v1.BareProduct{}, err
+		return v1.ResponseProduct{}, err
+	}
+
+	if hasCategories {
+		err = productServicePtr.ProductCategoryManager.SetProductCategories(id, categoryIDs, tx)
+		if err != nil {
+			return v1.ResponseProduct{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return v1.BareProduct{}, err
+		return v1.ResponseProduct{}, err
 	}
 
 	return productServicePtr.GetProductById(id)
@@ -218,12 +307,12 @@ func (productServicePtr *ProductService) DeleteProduct(id uuid.UUID) error {
 
 	defer tx.Rollback()
 
-	err = productServicePtr.ProductManager.DeleteProduct(id)
+	err = productServicePtr.ProductManager.DeleteProduct(id, tx)
 	if err != nil {
 		return err
 	}
 
-	err = productServicePtr.ProductCategoryManager.DeleteProductCategories(id)
+	err = productServicePtr.ProductCategoryManager.DeleteProductCategories(id, tx)
 	if err != nil {
 		return err
 	}

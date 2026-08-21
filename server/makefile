@@ -1,4 +1,4 @@
-.PHONY: mfile mup mdown mforce dev prod
+.PHONY: mfile mup mdown mforce dev prod swagger
 
 # 1. Load your existing .env file
 ifneq (,$(wildcard .env))
@@ -67,4 +67,10 @@ dev:
 
 # Run production-ready binary
 prod:
+	swag init -g main.go -o docs --parseDependency --parseInternal
 	go build -o /tmp/final . && /tmp/final
+
+# Generate swagger docs
+swagger:
+	swag init -g main.go -o docs --parseDependency --parseInternal
+	@echo "Swagger docs generated at docs/"

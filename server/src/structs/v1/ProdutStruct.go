@@ -1,37 +1,34 @@
-package v1
+package structsv1
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/JayPonda/Product-catalog/server/src/models"
-	"github.com/google/uuid"
 )
 
-type BareProduct struct {
+// ResponseProduct represents a product with its categories, used for read responses.
+type ResponseProduct struct {
 	models.Product
 	Categories []models.Category `json:"categories"`
 }
 
-type RequestProduct struct {
-	Name          string `json:"name" db:"name"`
-	Description   string `json:"description" db:"description"`
-	Price         int64  `json:"price" db:"price"`
-	StockQuantity int    `json:"stock_quantity" db:"stock_quantity"`
-
-	Category Categories `json:"Category" db:"-"`
+// ListProductsQuery holds pagination parameters for listing products.
+type ListProductsQuery struct {
+	Limit  int `query:"limit" validate:"omitempty,oneof=20 50 100"`
+	Offset int `query:"offset" validate:"omitempty,min=0"`
 }
 
-type ResponseProduct struct {
-	ID            uuid.UUID    `json:"id" db:"id"`
-	Name          string       `json:"name" db:"name"`
-	Description   string       `json:"description" db:"description"`
-	Price         int64        `json:"price" db:"price"`
-	StockQuantity int          `json:"stock_quantity" db:"stock_quantity"`
-	CreatedAt     time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at" db:"updated_at"`
-	DeletedAt     sql.NullTime `json:"deleted_at" db:"deleted_at"`
+// ListProductsResponse is the paginated product list payload.
+type ListProductsResponse struct {
+	Products []ResponseProduct `json:"products"`
+	Total    int64             `json:"total"`
+	Limit    int               `json:"limit"`
+	Offset   int               `json:"offset"`
+}
 
-	// category fields
-	Categories []Categories `json:"categories"`
+// RequestProduct is the payload for creating or updating a product.
+type RequestProduct struct {
+	Name          string     `json:"name" db:"name" validate:"required,min=1,max=255"`
+	Description   string     `json:"description" db:"description" validate:"required"`
+	Price         int64      `json:"price" db:"price" validate:"required,gt=0"`
+	StockQuantity int        `json:"stock_quantity" db:"stock_quantity" validate:"gte=0"`
+	Category      *RequestCategories `json:"category" db:"-"`
 }

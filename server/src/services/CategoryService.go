@@ -1,158 +1,67 @@
 package services
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/JayPonda/Product-catalog/server/src/models"
+	"github.com/JayPonda/Product-catalog/server/src/repositories"
 	"github.com/JayPonda/Product-catalog/server/utils"
-	"github.com/doug-martin/goqu/v9"
 	"github.com/google/uuid"
 )
 
 type CategoryService struct {
-	Db     *goqu.Database
-	Logger *utils.StructuredLogger
+	Logger          *utils.StructuredLogger
+	CategoryManager *repositories.CategoryRepository
 }
 
-const CATEGORY_DB = "categories"
-
 func InitCategoryService(
-	db *goqu.Database,
 	logger *utils.StructuredLogger,
+	categoryManager *repositories.CategoryRepository,
 ) (*CategoryService, error) {
 	return &CategoryService{
-		Db:     db,
-		Logger: logger,
+		Logger:          logger,
+		CategoryManager: categoryManager,
 	}, nil
 }
 
 func (categoryServicePtr *CategoryService) GetCategoryById(id uuid.UUID) (models.Category, error) {
-	var category models.Category
-
-	found, err := categoryServicePtr.Db.
-		From(CATEGORY_DB).
-		Where(
-			goqu.C("id").Eq(id),
-			goqu.C("deleted_at").IsNull(),
-		).
-		Select(
-			"id",
-			"name",
-			"created_at",
-			"updated_at",
-			"deleted_at",
-		).
-		ScanStruct(&category)
-
-	if err != nil {
-		return category, err
-	}
-
-	if !found {
-		return category, sql.ErrNoRows
-	}
-
-	return category, nil
+	return categoryServicePtr.CategoryManager.GetCategoryById(id)
 }
 
-func (categoryServicePtr *CategoryService) GetCategoryByNames(categories []string) ([]models.Category, error) {
-	var category []models.Category
+func (categoryServicePtr *CategoryService) GetCategoryByNames(names []string) ([]models.Category, error) {
+	return categoryServicePtr.CategoryManager.GetCategoryByNames(names)
+}
 
-	found, err := categoryServicePtr.Db.
-		From(CATEGORY_DB).
-		Where(
-			goqu.C("name").In(categories),
-			goqu.C("deleted_at").IsNull(),
-		).
-		Select(
-			"id",
-			"name",
-			"created_at",
-			"updated_at",
-			"deleted_at",
-		).
-		ScanStruct(&category)
-
-	if err != nil {
-		return category, err
-	}
-
-	if !found {
-		return category, sql.ErrNoRows
-	}
-
-	return category, nil
+func (categoryServicePtr *CategoryService) MatchCategories(prefix string, limit int) ([]models.Category, error) {
+	return categoryServicePtr.CategoryManager.MatchCategoriesByName(prefix, limit)
 }
 
 func (categoryServicePtr *CategoryService) CreateCategory(
 	category models.Category,
 ) (models.Category, error) {
 
-	id, err := utils.GetUUID()
-	if err != nil {
-		return category, err
+	name := utils.NormalizeName(category.Name)
+	if name == "" {
+		return models.Category{}, ErrEmptyCategoryName
 	}
 
-	_, err = categoryServicePtr.Db.
-		Insert(CATEGORY_DB).
-		Rows(
-			goqu.Record{
-				"id":   id,
-				"name": category.Name,
-			},
-		).
-		Executor().
-		Exec()
-
+	existing, err := categoryServicePtr.GetCategoryByNames([]string{name})
 	if err != nil {
-		return category, err
+		return models.Category{}, err
+	}
+	if len(existing) > 0 {
+		return models.Category{}, ErrDuplicateCategoryName
 	}
 
-	return categoryServicePtr.GetCategoryById(id)
-}
-
-func (categoryServicePtr *CategoryService) UpdateCategory(
-	id uuid.UUID,
-	preUpdateCategory models.Category,
-) (models.Category, error) {
-
-	_, err := categoryServicePtr.Db.
-		Update(CATEGORY_DB).
-		Set(
-			goqu.Record{
-				"name":       preUpdateCategory.Name,
-				"updated_at": time.Now(),
-			},
-		).
-		Where(
-			goqu.C("id").Eq(id),
-			goqu.C("deleted_at").IsNull(),
-		).
-		Executor().
-		Exec()
-
+	created, err := categoryServicePtr.CategoryManager.CreateCategory(models.Category{Name: name})
 	if err != nil {
-		return preUpdateCategory, err
+		if IsDuplicateCategoryName(err) {
+			return models.Category{}, ErrDuplicateCategoryName
+		}
+		return models.Category{}, err
 	}
 
-	return categoryServicePtr.GetCategoryById(id)
+	return created, nil
 }
 
 func (categoryServicePtr *CategoryService) DeleteCategory(id uuid.UUID) error {
-	_, err := categoryServicePtr.Db.
-		Update(CATEGORY_DB).
-		Set(
-			goqu.Record{
-				"deleted_at": time.Now(),
-			},
-		).
-		Where(
-			goqu.C("id").Eq(id),
-			goqu.C("deleted_at").IsNull(),
-		).
-		Executor().
-		Exec()
-
-	return err
+	return categoryServicePtr.CategoryManager.DeleteCategory(id)
 }

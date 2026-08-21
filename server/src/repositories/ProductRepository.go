@@ -25,10 +25,12 @@ func InitProductRepository(db *goqu.Database, logger *utils.StructuredLogger) (*
 	}, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID, exec ...utils.Executor) (models.Product, error) {
 	var product models.Product
 
-	found, err := ProductRepositoryPtr.Db.
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	found, err := db.
 		From(PRODUCT_DB).
 		Where(
 			goqu.C("id").Eq(id),
@@ -57,10 +59,12 @@ func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID) (mod
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string, exec ...utils.Executor) (models.Product, error) {
 	var product models.Product
 
-	found, err := ProductRepositoryPtr.Db.
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	found, err := db.
 		From(PRODUCT_DB).
 		Where(
 			goqu.C("name").Eq(name),
@@ -89,13 +93,61 @@ func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string) (mo
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Product) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProducts(limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	var products []models.Product
+
+	err := db.
+		From(PRODUCT_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+		).
+		Order(goqu.I("created_at").Desc()).
+		Limit(uint(limit)).
+		Offset(uint(offset)).
+		Select(
+			"id",
+			"name",
+			"description",
+			"price",
+			"stock_quantity",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStructs(&products)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int64
+
+	_, err = db.
+		From(PRODUCT_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+		).
+		Select(goqu.COUNT("*")).
+		ScanVal(&total)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return products, total, nil
+}
+
+func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Product, exec ...utils.Executor) (models.Product, error) {
 	uuid, err := utils.GetUUID()
 	if err != nil {
 		return product, err
 	}
 
-	_, err = ProductRepositoryPtr.Db.Insert(PRODUCT_DB).Rows(
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	_, err = db.Insert(PRODUCT_DB).Rows(
 		goqu.Record{
 			"id":             uuid,
 			"name":           product.Name,
@@ -109,13 +161,15 @@ func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Prod
 		return product, err
 	}
 
-	product, err = ProductRepositoryPtr.GetProductById(uuid)
+	product, err = ProductRepositoryPtr.GetProductById(uuid, exec...)
 	return product, err
 }
 
-func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUpdateProduct models.Product) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUpdateProduct models.Product, exec ...utils.Executor) (models.Product, error) {
 
-	_, err := ProductRepositoryPtr.Db.Update(PRODUCT_DB).Set(
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	_, err := db.Update(PRODUCT_DB).Set(
 		goqu.Record{
 			"name":           preUpdateProduct.Name,
 			"description":    preUpdateProduct.Description,
@@ -136,8 +190,10 @@ func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUp
 	return product, err
 }
 
-func (ProductRepositoryPtr *ProductRepository) DeleteProduct(id uuid.UUID) error {
-	_, err := ProductRepositoryPtr.Db.Update(PRODUCT_DB).Set(
+func (ProductRepositoryPtr *ProductRepository) DeleteProduct(id uuid.UUID, exec ...utils.Executor) error {
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	_, err := db.Update(PRODUCT_DB).Set(
 		goqu.Record{
 			"deleted_at": time.Now(),
 		},

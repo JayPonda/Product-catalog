@@ -1,0 +1,325 @@
+definitions:
+  models.Category:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/sql.NullTime'
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  sql.NullTime:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
+    type: object
+  structsv1.ListProductsResponse:
+    properties:
+      limit:
+        type: integer
+      offset:
+        type: integer
+      products:
+        items:
+          $ref: '#/definitions/structsv1.ResponseProduct'
+        type: array
+      total:
+        type: integer
+    type: object
+  structsv1.MatchCategoriesResponse:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/models.Category'
+        type: array
+    type: object
+  structsv1.RequestCategories:
+    properties:
+      new_categories:
+        items:
+          type: string
+        type: array
+      old_categories:
+        items:
+          $ref: '#/definitions/models.Category'
+        type: array
+    type: object
+  structsv1.RequestProduct:
+    properties:
+      category:
+        $ref: '#/definitions/structsv1.RequestCategories'
+      description:
+        type: string
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      price:
+        type: integer
+      stock_quantity:
+        minimum: 0
+        type: integer
+    required:
+    - description
+    - name
+    - price
+    type: object
+  structsv1.ResponseProduct:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/models.Category'
+        type: array
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/sql.NullTime'
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      price:
+        type: integer
+      stock_quantity:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /categories/match:
+    get:
+      description: List active categories whose name starts with the given prefix
+      parameters:
+      - default: sale
+        description: Name prefix
+        in: query
+        name: name
+        type: string
+      - default: 10
+        description: Max results (1-100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.MatchCategoriesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Match categories by name prefix
+      tags:
+      - categories
+  /products:
+    get:
+      description: List products with pagination, newest first
+      parameters:
+      - default: 20
+        description: Page size (20|50|100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ListProductsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List products
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      description: Create a new product with categories
+      parameters:
+      - description: Product payload
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/structsv1.RequestProduct'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a product
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      description: Soft-delete a product and its category relationships
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a product
+      tags:
+      - products
+    get:
+      description: Get a product by its UUID
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a product by ID
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      description: Update a product and its categories
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Product payload
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/structsv1.RequestProduct'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a product
+      tags:
+      - products
+  /products/name/{name}:
+    get:
+      description: Get a product by its name
+      parameters:
+      - description: Product name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ResponseProduct'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a product by name
+      tags:
+      - products
+swagger: "2.0"

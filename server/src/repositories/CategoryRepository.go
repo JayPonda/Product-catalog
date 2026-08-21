@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
@@ -27,10 +28,12 @@ func InitCategoryRepository(
 	}, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID) (models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID, exec ...utils.Executor) (models.Category, error) {
 	var category models.Category
 
-	found, err := CategoryRepositoryPtr.Db.
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	found, err := db.
 		From(CATEGORY_DB).
 		Where(
 			goqu.C("id").Eq(id),
@@ -56,10 +59,12 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID) (
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUID) ([]models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUID, exec ...utils.Executor) ([]models.Category, error) {
 	var category []models.Category
 
-	err := CategoryRepositoryPtr.Db.
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	err := db.
 		From(CATEGORY_DB).
 		Where(
 			goqu.C("id").In(ids),
@@ -81,13 +86,22 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUI
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories []string) ([]models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories []string, exec ...utils.Executor) ([]models.Category, error) {
 	var category []models.Category
 
-	found, err := CategoryRepositoryPtr.Db.
+	normalized := make([]string, 0, len(categories))
+	for _, name := range categories {
+		if name = utils.NormalizeName(name); name != "" {
+			normalized = append(normalized, name)
+		}
+	}
+
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	err := db.
 		From(CATEGORY_DB).
 		Where(
-			goqu.C("name").In(categories),
+			goqu.C("name").In(normalized),
 			goqu.C("deleted_at").IsNull(),
 		).
 		Select(
@@ -97,14 +111,10 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories [
 			"updated_at",
 			"deleted_at",
 		).
-		ScanStruct(&category)
+		ScanStructs(&category)
 
 	if err != nil {
-		return category, err
-	}
-
-	if !found {
-		return category, sql.ErrNoRows
+		return nil, err
 	}
 
 	return category, nil
@@ -112,6 +122,7 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories [
 
 func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 	category models.Category,
+	exec ...utils.Executor,
 ) (models.Category, error) {
 
 	id, err := utils.GetUUID()
@@ -119,12 +130,14 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 		return category, err
 	}
 
-	_, err = CategoryRepositoryPtr.Db.
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	_, err = db.
 		Insert(CATEGORY_DB).
 		Rows(
 			goqu.Record{
 				"id":   id,
-				"name": category.Name,
+				"name": utils.NormalizeName(category.Name),
 			},
 		).
 		Executor().
@@ -134,38 +147,45 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 		return category, err
 	}
 
-	return CategoryRepositoryPtr.GetCategoryById(id)
+	return CategoryRepositoryPtr.GetCategoryById(id, exec...)
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) UpdateCategory(
-	id uuid.UUID,
-	preUpdateCategory models.Category,
-) (models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) MatchCategoriesByName(prefix string, limit int, exec ...utils.Executor) ([]models.Category, error) {
+	var categories []models.Category
 
-	_, err := CategoryRepositoryPtr.Db.
-		Update(CATEGORY_DB).
-		Set(
-			goqu.Record{
-				"name":       preUpdateCategory.Name,
-				"updated_at": time.Now(),
-			},
-		).
+	escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	pattern := escaper.Replace(utils.NormalizeName(prefix)) + "%"
+
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	err := db.
+		From(CATEGORY_DB).
 		Where(
-			goqu.C("id").Eq(id),
 			goqu.C("deleted_at").IsNull(),
+			goqu.L("LOWER(name) LIKE ?", pattern),
 		).
-		Executor().
-		Exec()
+		Order(goqu.I("name").Asc()).
+		Limit(uint(limit)).
+		Select(
+			"id",
+			"name",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStructs(&categories)
 
 	if err != nil {
-		return preUpdateCategory, err
+		return nil, err
 	}
 
-	return CategoryRepositoryPtr.GetCategoryById(id)
+	return categories, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(id uuid.UUID) error {
-	_, err := CategoryRepositoryPtr.Db.
+func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(id uuid.UUID, exec ...utils.Executor) error {
+	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+
+	_, err := db.
 		Update(CATEGORY_DB).
 		Set(
 			goqu.Record{
