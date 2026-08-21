@@ -4,14 +4,22 @@ import (
 	// standard library
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	// third party library
-	"github.com/caarlos0/env/v11" // Add this import for env parsing
+	"github.com/caarlos0/env/v11"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	swagger "github.com/gofiber/contrib/v3/swaggo"
 	"github.com/joho/godotenv"
 
 	// our own packages
+	"github.com/JayPonda/Product-catalog/server/docs"
+	controllersv1 "github.com/JayPonda/Product-catalog/server/src/controllers/v1"
+	"github.com/JayPonda/Product-catalog/server/src/repositories"
+	routes "github.com/JayPonda/Product-catalog/server/src/routes"
+	"github.com/JayPonda/Product-catalog/server/src/services"
 	"github.com/JayPonda/Product-catalog/server/utils"
 )
 
@@ -34,6 +42,9 @@ type EnvConfig struct {
 	DBMaxIdle     int           `env:"DB_MAX_IDLE_CONNS" envDefault:"25"`
 	DBMaxLifetime time.Duration `env:"DB_MAX_LIFETIME" envDefault:"5m"`
 	DBMaxIdleTime time.Duration `env:"DB_MAX_IDLE_TIME" envDefault:"2m"`
+
+	// CORS
+	AllowedOrigins string `env:"ALLOWED_ORIGINS" envDefault:"http://localhost:3000,http://localhost:5173"`
 }
 
 // 2. Local getter implementations
@@ -65,6 +76,14 @@ func main() {
 	// Initialize your framework engine
 	app := fiber.New()
 
+	// CORS middleware
+	origins := strings.Split(cfg.AllowedOrigins, ",")
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: origins,
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
+	}))
+
 	// Register structured logging layer middleware properties
 	appLogger := utils.NewStructuredLogger()
 	app.Use(func(ctx fiber.Ctx) error {
@@ -81,11 +100,45 @@ func main() {
 		return ctx.Next()
 	})
 
-	// Endpoints setup
-	app.Get("/", func(c fiber.Ctx) error {
-		return c.SendString("Hello, World 👋!")
-	})
+	// Initialize repositories
+	productRepo, err := repositories.InitProductRepository(orm, appLogger)
+	if err != nil {
+		log.Fatalf("Failed to initialize product repository: %v", err)
+	}
 
+	categoryRepo, err := repositories.InitCategoryRepository(orm, appLogger)
+	if err != nil {
+		log.Fatalf("Failed to initialize category repository: %v", err)
+	}
+
+	productCategoryRepo, err := repositories.InitProductCategoryRepository(orm, appLogger)
+	if err != nil {
+		log.Fatalf("Failed to initialize product category repository: %v", err)
+	}
+
+	// Initialize services
+	productService, err := services.InitProductService(orm, appLogger, productRepo, categoryRepo, productCategoryRepo)
+	if err != nil {
+		log.Fatalf("Failed to initialize product service: %v", err)
+	}
+
+	categoryService, err := services.InitCategoryService(appLogger, categoryRepo)
+	if err != nil {
+		log.Fatalf("Failed to initialize category service: %v", err)
+	}
+
+	// Initialize controllers
+	productController := controllersv1.NewProductController(productService)
+	categoryController := controllersv1.NewCategoryController(categoryService)
+
+	// Register routes
+	routes.RegisterV1Routes(app, productController, categoryController)
+
+	// Swagger docs
+	docs.SwaggerInfo.BasePath = "/api/v1"
+	app.Get("/docs/*", swagger.HandlerDefault)
+
+	// Health check
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("OK")
 	})
@@ -93,3 +146,8 @@ func main() {
 	// Boot up application listener bindings dynamically using structural values
 	log.Fatal(app.Listen(fmt.Sprintf("%s:%s", cfg.getHost(), cfg.getPort())))
 }
+
+
+
+
+

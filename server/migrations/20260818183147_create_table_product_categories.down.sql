@@ -1,3 +1,3 @@
 DROP TABLE 
     IF EXISTS 
-        categories;
+        product_categories;
