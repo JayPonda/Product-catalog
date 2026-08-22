@@ -42,6 +42,7 @@ func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID, exec
 			"description",
 			"price",
 			"stock_quantity",
+			"user_id",
 			"created_at",
 			"updated_at",
 			"deleted_at",
@@ -76,6 +77,7 @@ func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string, exe
 			"description",
 			"price",
 			"stock_quantity",
+			"user_id",
 			"created_at",
 			"updated_at",
 			"deleted_at",
@@ -112,6 +114,7 @@ func (ProductRepositoryPtr *ProductRepository) GetProducts(limit int, offset int
 			"description",
 			"price",
 			"stock_quantity",
+			"user_id",
 			"created_at",
 			"updated_at",
 			"deleted_at",
@@ -147,6 +150,11 @@ func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Prod
 
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
 
+	userID := interface{}(nil)
+	if product.UserID.Valid {
+		userID = product.UserID.UUID
+	}
+
 	_, err = db.Insert(PRODUCT_DB).Rows(
 		goqu.Record{
 			"id":             uuid,
@@ -154,6 +162,7 @@ func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Prod
 			"description":    product.Description,
 			"price":          product.Price,
 			"stock_quantity": product.StockQuantity,
+			"user_id":        userID,
 		},
 	).Executor().Exec()
 
@@ -203,4 +212,54 @@ func (ProductRepositoryPtr *ProductRepository) DeleteProduct(id uuid.UUID, exec 
 	).Executor().Exec()
 
 	return err
+}
+
+// GetMyProducts returns products owned by the given user with pagination.
+func (ProductRepositoryPtr *ProductRepository) GetMyProducts(userID uuid.UUID, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
+
+	var products []models.Product
+
+	err := db.
+		From(PRODUCT_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+			goqu.C("user_id").Eq(userID),
+		).
+		Order(goqu.I("created_at").Desc()).
+		Limit(uint(limit)).
+		Offset(uint(offset)).
+		Select(
+			"id",
+			"name",
+			"description",
+			"price",
+			"stock_quantity",
+			"user_id",
+			"created_at",
+			"updated_at",
+			"deleted_at",
+		).
+		ScanStructs(&products)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int64
+
+	_, err = db.
+		From(PRODUCT_DB).
+		Where(
+			goqu.C("deleted_at").IsNull(),
+			goqu.C("user_id").Eq(userID),
+		).
+		Select(goqu.COUNT("*")).
+		ScanVal(&total)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return products, total, nil
 }
