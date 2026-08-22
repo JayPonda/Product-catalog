@@ -14,6 +14,7 @@ import (
 // 1. The minimal interface that demands configuration values from the outside
 type DBConfigProvider interface {
 	GetDSN() string
+	GetDialect() string
 	GetMaxOpenConns() int
 	GetMaxIdleConns() int
 	GetMaxLifetime() time.Duration
@@ -31,7 +32,7 @@ var (
 func InitDB(cfg DBConfigProvider) *goqu.Database {
 	dbOnce.Do(func() {
 		// 1. Open the connection pool using the DSN from the outside config
-		db, err := sql.Open("postgres", cfg.GetDSN())
+		db, err := sql.Open(cfg.GetDialect(), cfg.GetDSN())
 		if err != nil {
 			log.Fatalf("Critical: Error opening database stream: %v", err)
 		}
@@ -48,7 +49,7 @@ func InitDB(cfg DBConfigProvider) *goqu.Database {
 		}
 
 		// 4. Wrap with goqu dialect and store into singleton state
-		dialect := goqu.Dialect("postgres")
+		dialect := goqu.Dialect(cfg.GetDialect())
 		goquDBInstance = dialect.DB(db)
 	})
 

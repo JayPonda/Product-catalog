@@ -1,3 +1,4 @@
+-- +migrate Up
 CREATE TABLE products (
     id UUID PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
@@ -9,3 +10,7 @@ CREATE TABLE products (
     deleted_at TIMESTAMPTZ
 );
 
+-- +migrate Down
+DROP TABLE 
+    IF EXISTS
+        products;
