@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
@@ -96,6 +97,11 @@ func dedupOrdersRemoveCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.
 // dedupOrdersRemove runs the duplicate-order removal for the given time window.
 // It receives the app config and logger as arguments so the command can pull
 // envs/context from configuration rather than reaching for globals inside.
+//
+// If the requested range is larger than a single window, it is split into
+// window-sized batches that are processed concurrently (bounded worker pool),
+// so a long manual range (e.g. 6h -> three 2.5h batches) runs in parallel while
+// staying within DB limits.
 func dedupOrdersRemove(start, end time.Time, cfg AppConfig, logger *utils.StructuredLogger) error {
 	mode := "scheduled"
 	if dedupStart != "" && dedupEnd != "" {
@@ -125,7 +131,110 @@ func dedupOrdersRemove(start, end time.Time, cfg AppConfig, logger *utils.Struct
 		return err
 	}
 
-	// part 2: fetch all orders in the window, batched (default 200).
+	// Split the range into window-sized batches.
+	chunks := splitRange(start, end, dedupWindow, dedupNearby)
+	logger.Debug(nil, "dedup_orders_remove", "plan", "range split into sub-windows", utils.LoggerMeta{
+		"chunks": len(chunks),
+	})
+
+	results := make([]dedupChunkResult, len(chunks))
+	if len(chunks) == 1 {
+		// Single batch: process sequentially (e.g. the normal scheduled 2.5h run).
+		results[0] = processDedupChunk(chunks[0][0], chunks[0][1], orderSvc, logger)
+	} else {
+		// Multiple batches: process concurrently via a fixed worker pool, so the
+		// number of goroutines stays bounded (maxConcurrency) regardless of how
+		// many batches a large range is split into.
+		const maxConcurrency = 5
+		jobs := make(chan int, len(chunks))
+		for i := range chunks {
+			jobs <- i
+		}
+		close(jobs)
+
+		var wg sync.WaitGroup
+		for w := 0; w < maxConcurrency; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := range jobs {
+					s, e := chunks[i][0], chunks[i][1]
+					logger.Debug(nil, "dedup_orders_remove", "chunk", "processing sub-window", utils.LoggerMeta{
+						"index": i,
+						"start": s.Format(time.RFC3339),
+						"end":   e.Format(time.RFC3339),
+					})
+					results[i] = processDedupChunk(s, e, orderSvc, logger)
+				}
+			}()
+		}
+		wg.Wait()
+	}
+
+	// Aggregate results across all batches. removedIDs are unioned so that
+	// orders appearing in overlapping batch regions are not double-counted.
+	var totalScanned, totalDup, totalRemoved int
+	seen := make(map[uuid.UUID]struct{})
+	var errs []error
+	for i, r := range results {
+		if r.err != nil {
+			errs = append(errs, fmt.Errorf(
+				"chunk %d (%s..%s): %w",
+				i, chunks[i][0].Format(time.RFC3339), chunks[i][1].Format(time.RFC3339), r.err))
+			continue
+		}
+		totalScanned += r.scanned
+		totalDup += r.dupGroups
+		totalRemoved += r.removed
+		for _, id := range r.removedIDs {
+			seen[id] = struct{}{}
+		}
+	}
+	totalWould := len(seen)
+
+	if dedupDryRun {
+		logger.Info(nil, "dedup_orders_remove", "dry_run", "no changes applied (dry-run)", utils.LoggerMeta{
+			"start":            start.Format(time.RFC3339),
+			"end":              end.Format(time.RFC3339),
+			"chunks":           len(chunks),
+			"scanned":          totalScanned,
+			"duplicate_groups": totalDup,
+			"would_remove":     totalWould,
+		})
+		if len(errs) > 0 {
+			return errors.Join(errs...)
+		}
+		return nil
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	logger.Info(nil, "dedup_orders_remove", "done", "dedup complete", utils.LoggerMeta{
+		"start":            start.Format(time.RFC3339),
+		"end":              end.Format(time.RFC3339),
+		"chunks":           len(chunks),
+		"scanned":          totalScanned,
+		"duplicate_groups": totalDup,
+		"removed":          totalRemoved,
+	})
+	return nil
+}
+
+// dedupChunkResult holds the outcome of processing a single sub-window.
+type dedupChunkResult struct {
+	scanned     int
+	dupGroups   int
+	removed     int
+	wouldRemove int
+	removedIDs  []uuid.UUID
+	err         error
+}
+
+// processDedupChunk fetches, clusters, and (unless dry-run) removes duplicates
+// for one sub-window. It is safe to run concurrently for disjoint windows.
+func processDedupChunk(start, end time.Time, orderSvc *services.OrderService, logger *utils.StructuredLogger) dedupChunkResult {
 	type dupKey struct {
 		customer uuid.UUID
 		cents    int64
@@ -133,37 +242,28 @@ func dedupOrdersRemove(start, end time.Time, cfg AppConfig, logger *utils.Struct
 	groups := make(map[dupKey][]models.Order)
 
 	offset := 0
-	var scanned int
+	scanned := 0
 	for {
 		resp, err := orderSvc.ListOrdersInRange(start, end, dedupBatch, offset)
 		if err != nil {
-			logger.Error(nil, "dedup_orders_remove", "fetch", "failed to list orders in range", utils.LoggerMeta{"offset": offset}, err.Error())
-			return err
+			return dedupChunkResult{err: err}
 		}
 		for _, o := range resp.Orders {
 			key := dupKey{customer: o.CustomerID, cents: int64(math.Round(o.TotalBill * 100))}
 			groups[key] = append(groups[key], o)
 		}
 		scanned += len(resp.Orders)
-		logger.Debug(nil, "dedup_orders_remove", "fetch", "fetched batch", utils.LoggerMeta{
-			"offset":        offset,
-			"fetched":       len(resp.Orders),
-			"scanned_total": scanned,
-		})
 		if len(resp.Orders) < dedupBatch {
 			break
 		}
 		offset += len(resp.Orders)
 	}
 
-	logger.Info(nil, "dedup_orders_remove", "scan", "orders scanned", utils.LoggerMeta{
-		"scanned": scanned,
-		"groups":  len(groups),
-	})
-
-	// part 0 + 3: define duplicates (same customer + value, nearby created_at)
-	// and keep the earliest of each time-proximity cluster.
+	// define duplicates (same customer + value, nearby created_at). Within each
+	// time-proximity cluster the LATEST order is kept and the earlier ones are
+	// treated as redundant and removed.
 	var toRemove []uuid.UUID
+	var keptIDs []uuid.UUID
 	dupGroups := 0
 	for _, orders := range groups {
 		if len(orders) < 2 {
@@ -172,54 +272,101 @@ func dedupOrdersRemove(start, end time.Time, cfg AppConfig, logger *utils.Struct
 		sort.Slice(orders, func(i, j int) bool {
 			return orders[i].CreatedAt.Before(orders[j].CreatedAt)
 		})
+
+		// Walk clusters: orders within --nearby of the previous order belong to
+		// the same cluster; the latest order of each cluster is kept.
 		dupGroups++
-		lastKeep := orders[0].CreatedAt
+		clusterStart := 0
+		prevTime := orders[0].CreatedAt
 		for i := 1; i < len(orders); i++ {
-			if orders[i].CreatedAt.Sub(lastKeep) <= dedupNearby {
-				toRemove = append(toRemove, orders[i].ID)
-			} else {
-				lastKeep = orders[i].CreatedAt
+			if orders[i].CreatedAt.Sub(prevTime) <= dedupNearby {
+				prevTime = orders[i].CreatedAt
+				continue
 			}
+			// boundary: orders[clusterStart..i-1] form a cluster; keep its last.
+			for j := clusterStart; j < i-1; j++ {
+				toRemove = append(toRemove, orders[j].ID)
+			}
+			keptIDs = append(keptIDs, orders[i-1].ID)
+			clusterStart = i
+			prevTime = orders[i].CreatedAt
 		}
+		// flush final cluster: keep the last order, remove the earlier ones.
+		for j := clusterStart; j < len(orders)-1; j++ {
+			toRemove = append(toRemove, orders[j].ID)
+		}
+		keptIDs = append(keptIDs, orders[len(orders)-1].ID)
 	}
 
-	logger.Info(nil, "dedup_orders_remove", "cluster", "duplicates identified", utils.LoggerMeta{
-		"duplicate_groups": dupGroups,
-		"to_remove":        len(toRemove),
+	// Diagnostic: prove the latest is kept and earlier ones are redundant by
+	// surfacing the flagged IDs with their created_at.
+	byID := make(map[uuid.UUID]time.Time, len(toRemove)+len(keptIDs))
+	for _, os := range groups {
+		for _, o := range os {
+			byID[o.ID] = o.CreatedAt
+		}
+	}
+	redundant := make([]string, 0, len(toRemove))
+	for _, id := range toRemove {
+		redundant = append(redundant, fmt.Sprintf("%s@%s", id.String(), byID[id].Format(time.RFC3339)))
+	}
+	kept := make([]string, 0, len(keptIDs))
+	for _, id := range keptIDs {
+		kept = append(kept, fmt.Sprintf("%s@%s", id.String(), byID[id].Format(time.RFC3339)))
+	}
+	logger.Debug(nil, "dedup_orders_remove", "redundant", "orders flagged redundant (earlier ones, would remove)", utils.LoggerMeta{
+		"count":     len(redundant),
+		"order_ids": redundant,
+	})
+	logger.Debug(nil, "dedup_orders_remove", "kept", "orders kept (latest of each cluster)", utils.LoggerMeta{
+		"count":     len(kept),
+		"order_ids": kept,
 	})
 
-	// report or apply.
 	if dedupDryRun {
-		logger.Info(nil, "dedup_orders_remove", "dry_run", "no changes applied (dry-run)", utils.LoggerMeta{
-			"start":            start.Format(time.RFC3339),
-			"end":              end.Format(time.RFC3339),
-			"scanned":          scanned,
-			"duplicate_groups": dupGroups,
-			"would_remove":     len(toRemove),
-		})
-		return nil
+		return dedupChunkResult{scanned: scanned, dupGroups: dupGroups, wouldRemove: len(toRemove), removedIDs: toRemove}
 	}
 
 	removed := 0
-	for _, id := range toRemove {
-		if err := orderSvc.RemoveOrder(id); err != nil {
-			if err == sql.ErrNoRows {
-				logger.Debug(nil, "dedup_orders_remove", "remove", "order already removed, skipping", utils.LoggerMeta{"order_id": id.String()})
-				continue
-			}
-			logger.Error(nil, "dedup_orders_remove", "remove", "failed to remove order", utils.LoggerMeta{"order_id": id.String()}, err.Error())
-			return fmt.Errorf("failed to remove order %s: %w", id, err)
+	if len(toRemove) > 0 {
+		affected, err := orderSvc.RemoveOrders(toRemove)
+		if err != nil {
+			return dedupChunkResult{err: err}
 		}
-		logger.Debug(nil, "dedup_orders_remove", "remove", "soft-deleted order", utils.LoggerMeta{"order_id": id.String()})
-		removed++
+		removed = int(affected)
 	}
+	return dedupChunkResult{scanned: scanned, dupGroups: dupGroups, removed: removed, removedIDs: toRemove}
+}
 
-	logger.Info(nil, "dedup_orders_remove", "done", "dedup complete", utils.LoggerMeta{
-		"start":            start.Format(time.RFC3339),
-		"end":              end.Format(time.RFC3339),
-		"scanned":          scanned,
-		"duplicate_groups": dupGroups,
-		"removed":          removed,
-	})
-	return nil
+// splitRange divides [start, end) into window-sized sub-windows that overlap by
+// `overlap`, so a duplicate cluster straddling a batch boundary (within the
+// nearby threshold) is still fully captured by one batch. The final batch is
+// clamped to `end`. A range smaller than one window yields a single chunk.
+func splitRange(start, end time.Time, window, overlap time.Duration) [][2]time.Time {
+	if window <= 0 {
+		window = time.Hour
+	}
+	if overlap >= window {
+		overlap = 0
+	}
+	var chunks [][2]time.Time
+	t := start
+	for t.Before(end) {
+		cEnd := t.Add(window)
+		if cEnd.After(end) {
+			cEnd = end
+		}
+		chunks = append(chunks, [2]time.Time{t, cEnd})
+		if cEnd == end {
+			break
+		}
+		t = t.Add(window).Add(-overlap)
+		if !t.After(chunks[len(chunks)-1][0]) {
+			t = chunks[len(chunks)-1][1]
+		}
+	}
+	if len(chunks) == 0 {
+		chunks = append(chunks, [2]time.Time{start, end})
+	}
+	return chunks
 }

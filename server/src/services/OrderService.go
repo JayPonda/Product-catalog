@@ -77,3 +77,12 @@ func (orderServicePtr *OrderService) RemoveOrder(id uuid.UUID) error {
 
 	return tx.Commit()
 }
+
+// RemoveOrders soft-deletes the given orders in a single batched statement.
+// It returns the number of rows actually affected.
+func (orderServicePtr *OrderService) RemoveOrders(ids []uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	return orderServicePtr.OrderManager.DeleteOrders(ids)
+}

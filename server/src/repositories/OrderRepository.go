@@ -142,3 +142,39 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrder(id uuid.UUID, exec ...uti
 
 	return nil
 }
+
+// DeleteOrders soft-deletes the given orders in a single statement by setting
+// deleted_at. Orders already soft-deleted (deleted_at IS NOT NULL) are skipped.
+// It returns the number of rows actually affected, so callers can report how
+// many duplicates were really removed (idempotent across runs).
+func (orderRepositoryPtr *OrderRepository) DeleteOrders(ids []uuid.UUID, exec ...utils.Executor) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	db := utils.ResolveExecutor(orderRepositoryPtr.Db, exec)
+
+	vals := make([]interface{}, len(ids))
+	for i, id := range ids {
+		vals[i] = id
+	}
+
+	res, err := db.Update(ORDER_DB).
+		Set(goqu.Record{"deleted_at": time.Now()}).
+		Where(
+			goqu.C("id").In(vals...),
+			goqu.C("deleted_at").IsNull(),
+		).
+		Executor().
+		Exec()
+	if err != nil {
+		return 0, err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return affected, nil
+}
