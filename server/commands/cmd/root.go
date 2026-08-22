@@ -54,6 +54,8 @@ func Execute(cfg AppConfig, logger *utils.StructuredLogger) {
 	appConfig = cfg
 	appLogger = logger
 
+	registerAppCommands(rootCmd, cfg, logger)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
