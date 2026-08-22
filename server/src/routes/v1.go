@@ -21,6 +21,9 @@ func RegisterV1Routes(app *fiber.App, productController *controllersv1.ProductCo
 	products.Post("/:id/categories/unlink", middleware.RequireAuth(authSecret), productController.UnlinkCategory)
 	products.Delete("/:id", middleware.RequireAuth(authSecret), productController.DeleteProduct)
 
+	myProducts := v1.Group("/my-products")
+	myProducts.Get("", middleware.RequireAuth(authSecret), productController.ListMyProducts)
+
 	categories := v1.Group("/categories")
 	categories.Get("", categoryController.ListCategories)
 	categories.Get("/match", categoryController.MatchCategories)

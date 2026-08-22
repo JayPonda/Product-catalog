@@ -94,7 +94,7 @@ func (pc *ProductController) CreateProduct(ctx fiber.Ctx) error {
 		})
 	}
 
-	product, err := pc.Service.CreateProduct(req)
+	product, err := pc.Service.CreateProduct(req, ctx.Locals(utils.UserContextKey).(uuid.UUID))
 	if err != nil {
 		if errors.Is(err, services.ErrDuplicateProductName) {
 			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
@@ -107,6 +107,50 @@ func (pc *ProductController) CreateProduct(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusCreated).JSON(product)
+}
+
+// ListMyProducts godoc
+// @Summary      List my products
+// @Description  List products owned by the authenticated user, newest first
+// @Tags         products
+// @Produce      json
+// @Param        limit   query  int  false  "Page size (20|50|100)"  default(20)
+// @Param        offset  query  int  false  "Offset"             default(0)
+// @Success      200     {object}  v1.ListProductsResponse
+// @Failure      401     {object}  map[string]string
+// @Failure      500     {object}  map[string]string
+// @Router       /my-products [get]
+func (pc *ProductController) ListMyProducts(ctx fiber.Ctx) error {
+	var query v1.ListProductsQuery
+
+	if err := ctx.Bind().Query(&query); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "invalid query parameters",
+			"details": err.Error(),
+		})
+	}
+
+	if err := pc.Validator.Struct(query); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "validation failed",
+			"details": err.Error(),
+		})
+	}
+
+	if query.Limit == 0 {
+		query.Limit = 20
+	}
+
+	userID := ctx.Locals(utils.UserContextKey).(uuid.UUID)
+
+	response, err := pc.Service.ListMyProducts(userID, query.Limit, query.Offset)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return ctx.JSON(response)
 }
 
 // GetProductById godoc

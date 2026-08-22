@@ -334,6 +334,7 @@ function validateForm() {
 async function saveProduct() {
     if (!validateForm()) return
     const payload = { ...formData, price: priceToCents(formData.price) }
+    error.value = ''
     console.log('save product', payload)
 
     let data;

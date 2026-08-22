@@ -149,7 +149,7 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 	return response, nil
 }
 
-func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct) (v1.ResponseProduct, error) {
+func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct, userID uuid.UUID) (v1.ResponseProduct, error) {
 	_, err := productServicePtr.ProductManager.GetProductByName(product.Name)
 	if err == nil {
 		return v1.ResponseProduct{}, ErrDuplicateProductName
@@ -170,6 +170,7 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 		Description:   product.Description,
 		Price:         product.Price,
 		StockQuantity: product.StockQuantity,
+		UserID:        uuid.NullUUID{Valid: true, UUID: userID},
 	}, tx)
 	if err != nil {
 		if IsDuplicateProductName(err) {
@@ -183,6 +184,71 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 	}
 
 	return productServicePtr.GetProductById(dbProduct.ID)
+}
+
+// ListMyProducts returns the products owned by the given user.
+func (productServicePtr *ProductService) ListMyProducts(userID uuid.UUID, limit int, offset int) (v1.ListProductsResponse, error) {
+	var response v1.ListProductsResponse
+
+	products, total, err := productServicePtr.ProductManager.GetMyProducts(userID, limit, offset)
+	if err != nil {
+		return response, err
+	}
+
+	productIDs := make([]uuid.UUID, 0, len(products))
+	for _, product := range products {
+		productIDs = append(productIDs, product.ID)
+	}
+
+	categoriesByProduct := make(map[uuid.UUID][]models.Category, len(products))
+
+	if len(productIDs) > 0 {
+		links, err := productServicePtr.ProductCategoryManager.GetCategoriesByProductIds(productIDs)
+		if err != nil {
+			return response, err
+		}
+
+		categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
+		for _, link := range links {
+			categoryIDSet[link.CategoryID] = struct{}{}
+		}
+
+		categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
+		for categoryID := range categoryIDSet {
+			categoryIDs = append(categoryIDs, categoryID)
+		}
+
+		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(categoryIDs)
+		if err != nil {
+			return response, err
+		}
+
+		categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
+		for _, category := range categories {
+			categoriesByID[category.ID] = category
+		}
+
+		for _, link := range links {
+			if category, ok := categoriesByID[link.CategoryID]; ok {
+				categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+			}
+		}
+	}
+
+	items := make([]v1.ResponseProduct, 0, len(products))
+	for _, product := range products {
+		items = append(items, v1.ResponseProduct{
+			Product:    product,
+			Categories: categoriesByProduct[product.ID],
+		})
+	}
+
+	response.Products = items
+	response.Total = total
+	response.Limit = limit
+	response.Offset = offset
+
+	return response, nil
 }
 
 func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.RequestProduct) (v1.ResponseProduct, error) {
