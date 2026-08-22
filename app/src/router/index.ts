@@ -25,6 +25,9 @@ import Category from '@/views/Category.vue'
 import ModifyCategory from '@/components/Category/ModifyCategory.vue'
 import Product from '@/views/Product.vue'
 import ModifyProduct from '@/views/ModifyProduct.vue'
+import Login from '@/views/Login.vue'
+import Register from '@/views/Register.vue'
+import { useAuthStore } from '@/stores/auth'
 
 
 const router = createRouter({
@@ -34,49 +37,41 @@ const router = createRouter({
       path: "/categories",
       name: 'categories',
       component: Category,
-      meta: {
-        layout: 'DefaultLayout'
-      }
     },
     {
       path: "/categories/add",
       name: 'categories-add',
       component: ModifyCategory,
-      meta: {
-        layout: 'DefaultLayout'
-      }
     },
     {
       path: "/products",
       name: 'products',
       component: Product,
-      meta: {
-        layout: 'DefaultLayout'
-      }
     },
     {
       path: "/products/add",
       name: 'products-create',
       component: ModifyProduct,
-      meta: {
-        layout: 'DefaultLayout'
-      }
     },
     {
       path: "/products/:id/edit",
       name: 'products-modify',
       component: ModifyProduct,
-      meta: {
-        layout: 'DefaultLayout'
-      }
+    },
+    {
+      path: "/login",
+      name: 'login',
+      component: Login,
+    },
+    {
+      path: "/register",
+      name: 'register',
+      component: Register,
     },
     {
       path: "/",
       name: "home",
       component:  Home,
-      meta: {
-        layout: 'LoginLayout'
-      }
     }
   ],
   scrollBehavior(to, from, savedPosition) {
@@ -88,6 +83,28 @@ const router = createRouter({
     }
     return savedPosition ?? { top: 0 }
   },
+})
+
+// Redirect unauthenticated users away from protected routes.
+let authInitialized = false
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  // ensure we've restored state from the cookie at least once
+  if (!authInitialized) {
+    await auth.fetchMe()
+    authInitialized = true
+  }
+
+  // Only the create/edit routes are protected; lists stay open to everyone.
+  const isProtected =
+    to.path === '/products/add' ||
+    to.path === '/categories/add' ||
+    /^\/products\/[^/]+\/edit$/.test(to.path)
+
+  if (isProtected && !auth.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  return true
 })
 
 export default router

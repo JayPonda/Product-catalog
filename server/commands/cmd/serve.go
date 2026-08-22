@@ -38,9 +38,10 @@ var serverCmd = &cobra.Command{
 		// CORS middleware
 		origins := strings.Split(cfg.GetAllowedOrigins(), ",")
 		app.Use(cors.New(cors.Config{
-			AllowOrigins: origins,
-			AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowOrigins:     origins,
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowCredentials: true,
 		}))
 
 		// Register structured logging layer middleware properties
@@ -74,6 +75,11 @@ var serverCmd = &cobra.Command{
 			log.Fatalf("Failed to initialize product category repository: %v", err)
 		}
 
+		userRepo, err := repositories.InitUserRepository(orm, appLogger)
+		if err != nil {
+			log.Fatalf("Failed to initialize user repository: %v", err)
+		}
+
 		// Initialize services
 		productService, err := services.InitProductService(orm, appLogger, productRepo, categoryRepo, productCategoryRepo)
 		if err != nil {
@@ -85,12 +91,25 @@ var serverCmd = &cobra.Command{
 			log.Fatalf("Failed to initialize category service: %v", err)
 		}
 
+		authService, err := services.InitAuthService(
+			orm,
+			appLogger,
+			userRepo,
+			cfg.GetJWTSecret(),
+			cfg.GetAccessTokenTTL(),
+			cfg.GetRefreshTokenTTL(),
+		)
+		if err != nil {
+			log.Fatalf("Failed to initialize auth service: %v", err)
+		}
+
 		// Initialize controllers
 		productController := controllersv1.NewProductController(productService)
 		categoryController := controllersv1.NewCategoryController(categoryService)
+		authController := controllersv1.NewAuthController(authService, cfg.GetAppEnv() != "local")
 
 		// Register routes
-		routes.RegisterV1Routes(app, productController, categoryController)
+		routes.RegisterV1Routes(app, productController, categoryController, authController, cfg.GetJWTSecret())
 
 		// Swagger docs
 		docs.SwaggerInfo.BasePath = "/api/v1"

@@ -40,12 +40,28 @@ type EnvConfig struct {
 
 	// CORS
 	AllowedOrigins string `env:"ALLOWED_ORIGINS" envDefault:"http://localhost:3000,http://localhost:5173"`
+
+	// Runtime environment (local|prod). Controls cookie Secure flag.
+	AppEnv string `env:"APP_ENV" envDefault:"local"`
+
+	// Auth / JWT
+	JWTSecret       string        `env:"JWT_SECRET,required"`
+	AccessTokenTTL  time.Duration `env:"ACCESS_TOKEN_TTL" envDefault:"15m"`
+	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL" envDefault:"168h"`
 }
 
 // 2. Local getter implementations
 func (e *EnvConfig) GetHost() string           { return e.AppHost }
 func (e *EnvConfig) GetPort() string           { return e.AppPort }
 func (e *EnvConfig) GetAllowedOrigins() string { return e.AllowedOrigins }
+
+// GetAppEnv returns the runtime environment; used to decide cookie Secure flag.
+func (e *EnvConfig) GetAppEnv() string { return e.AppEnv }
+
+// Auth / JWT getters
+func (e *EnvConfig) GetJWTSecret() string          { return e.JWTSecret }
+func (e *EnvConfig) GetAccessTokenTTL() time.Duration  { return e.AccessTokenTTL }
+func (e *EnvConfig) GetRefreshTokenTTL() time.Duration { return e.RefreshTokenTTL }
 
 // 3. Fulfill your read-only DBConfigProvider contract requirements
 func (e *EnvConfig) GetDSN() string {

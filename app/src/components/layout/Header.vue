@@ -24,9 +24,8 @@
 
       <!-- Desktop navigation -->
       <div class="hidden items-center gap-8 md:flex">
-
         <RouterLink
-          to="/products/"
+          to="/products"
           active-class="text-white underline underline-offset-4"
           class="text-sm font-medium text-emerald-50 transition hover:text-white"
         >
@@ -39,12 +38,34 @@
         >
           Categories
         </RouterLink>
-
       </div>
 
       <!-- Desktop actions -->
       <div class="hidden items-center gap-3 md:flex">
-
+        <template v-if="auth.isAuthenticated">
+          <span class="text-sm font-medium text-emerald-50">{{ auth.user?.email }}</span>
+          <button
+            type="button"
+            @click="handleLogout"
+            class="rounded-lg bg-white px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50"
+          >
+            Logout
+          </button>
+        </template>
+        <template v-else>
+          <RouterLink
+            to="/login"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-emerald-50 transition hover:bg-emerald-600 hover:text-white"
+          >
+            Login
+          </RouterLink>
+          <RouterLink
+            to="/register"
+            class="rounded-lg bg-white px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50"
+          >
+            Register
+          </RouterLink>
+        </template>
       </div>
 
       <!-- Mobile menu button -->
@@ -72,7 +93,6 @@
       class="border-t border-emerald-600 bg-emerald-700 px-4 py-4 md:hidden"
     >
       <div class="mx-auto max-w-7xl space-y-1">
-
         <RouterLink
           to="/products"
           active-class="bg-emerald-600 text-white"
@@ -93,6 +113,32 @@
 
         <div class="my-2 border-t border-emerald-600" />
 
+        <template v-if="auth.isAuthenticated">
+          <p class="px-3 py-2 text-sm font-medium text-emerald-50">{{ auth.user?.email }}</p>
+          <button
+            type="button"
+            @click="handleLogout"
+            class="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-emerald-600"
+          >
+            Logout
+          </button>
+        </template>
+        <template v-else>
+          <RouterLink
+            to="/login"
+            class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
+            @click="mobileMenuOpen = false"
+          >
+            Login
+          </RouterLink>
+          <RouterLink
+            to="/register"
+            class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
+            @click="mobileMenuOpen = false"
+          >
+            Register
+          </RouterLink>
+        </template>
       </div>
     </div>
   </header>
@@ -100,22 +146,21 @@
 
 <script setup>
 import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import {
   Package,
   Menu,
   X,
-  ArrowRight,
 } from '@lucide/vue'
 
 const mobileMenuOpen = ref(false)
+const router = useRouter()
+const auth = useAuthStore()
 
-const props = defineProps({
-  isLoggedIn: {
-    type: Boolean, 
-    default: false,
-    required: true
-  },
-})
-
+async function handleLogout() {
+  mobileMenuOpen.value = false
+  await auth.logout()
+  router.push('/login')
+}
 </script>

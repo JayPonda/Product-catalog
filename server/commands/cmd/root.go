@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"os"
+	"time"
 
 	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/spf13/cobra"
@@ -20,6 +21,10 @@ type AppConfig interface {
 	GetPort() string
 	GetAllowedOrigins() string
 	GetDialect() string
+	GetAppEnv() string
+	GetJWTSecret() string
+	GetAccessTokenTTL() time.Duration
+	GetRefreshTokenTTL() time.Duration
 }
 
 // Shared dependencies injected by main.main() before the root command executes.

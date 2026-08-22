@@ -1,8 +1,8 @@
 <template>
     <div class="space-y-6">
 
-        <!-- inline add: type a name and add without leaving the page -->
-        <div class="flex items-end justify-end gap-2">
+        <!-- inline add: type a name and add without leaving the page (authenticated users only) -->
+        <div class="flex items-end justify-end gap-2" v-if="auth.isAuthenticated">
             <div>
                 <label for="new-category" class="block text-sm font-medium text-gray-700">New category</label>
                 <input id="new-category" type="text" v-model="newCategory" @keyup.enter="addCategory"
@@ -23,14 +23,14 @@
                 v-if="Object.keys(categories).length >= 0">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 font-semibold text-gray-700" v-for="categorieTitle in categoryTableTitle"
-                            :key="categorieTitle">{{ categorieTitle }}</th>
+                        <th class="px-4 py-3 font-semibold text-gray-700" v-for="categorieTitle in scalarCategoryTitles"
+                            :key="categorieTitle">{{ categorieTitle.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
                     <tr class="hover:bg-gray-50" v-for="(categoryData, index) in categories.categories"
                         :key="categoryData.id">
-                        <td class="px-4 py-3" v-for="categorieTitle in categoryTableTitle" :key="categorieTitle"> {{
+                        <td class="px-4 py-3" v-for="categorieTitle in scalarCategoryTitles" :key="categorieTitle"> {{
                             categoryData[categorieTitle] }}</td>
                     </tr>
                 </tbody>
@@ -67,11 +67,17 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getCategories, createCategory } from '@/network/request.js'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 const curruntPage = ref(0) // offset
 const curruntLimit = 20
 const categories = ref({})
 const categoryTableTitle = ref([])
+const scalarCategoryTitles = computed(() =>
+  categoryTableTitle.value.filter((t) => t !== 'deleted_at'),
+)
 const error = ref('')
 const newCategory = ref('')
 const addingCategory = ref(false)

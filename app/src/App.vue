@@ -1,22 +1,14 @@
 <script setup lang="ts">
-import { defineAsyncComponent, computed, type DefineComponent } from 'vue';
-import { RouterView, useRoute } from 'vue-router'
+import { defineAsyncComponent } from 'vue';
+import { RouterView } from 'vue-router'
 
-const layouts = {
-  DefaultLayout: defineAsyncComponent(() => import('@/layouts/Base.vue')),
-  LoginLayout: defineAsyncComponent(() => import('@/layouts/Auth.vue'))
-}
-
-const route = useRoute()
-const layout = computed(() => {
-  const layoutName = route.meta.layout ?? 'DefaultLayout'
-  return layouts[layoutName]
-})
-
+// A single layout is used for every route; the Header itself decides what to
+// render based on the live authentication state (see stores/auth.ts).
+const AppLayout = defineAsyncComponent(() => import('@/layouts/Base.vue'))
 </script>
 
 <template>
-  <component :is="layout">
+  <AppLayout>
     <RouterView />
-  </component>
+  </AppLayout>
 </template>
