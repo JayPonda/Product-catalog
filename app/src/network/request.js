@@ -71,6 +71,37 @@ export async function getProducts(page, limit) {
   }
 }
 
+export async function getMyProducts(page, limit) {
+  const offset = page * limit
+
+  try {
+    const response = await fetch(
+      getBaseUrl(V1, '/my-products', { limit, offset }),
+      DEFAULT_OPTS,
+    )
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: response.status,
+      }
+    }
+
+    const data = await response.json()
+
+    return {
+      ok: true,
+      data: data,
+    }
+  } catch (error) {
+    console.error(error)
+    return {
+      ok: false,
+      error: error,
+    }
+  }
+}
+
 export async function createCategory(categoryName) {
   try {
     const response = await fetch(

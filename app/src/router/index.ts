@@ -24,6 +24,7 @@ import Home from '@/views/Home.vue'
 import Category from '@/views/Category.vue'
 import ModifyCategory from '@/components/Category/ModifyCategory.vue'
 import Product from '@/views/Product.vue'
+import MyProducts from '@/views/MyProducts.vue'
 import ModifyProduct from '@/views/ModifyProduct.vue'
 import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
@@ -47,6 +48,11 @@ const router = createRouter({
       path: "/products",
       name: 'products',
       component: Product,
+    },
+    {
+      path: "/my-products",
+      name: 'my-products',
+      component: MyProducts,
     },
     {
       path: "/products/add",
@@ -95,9 +101,11 @@ router.beforeEach(async (to) => {
     authInitialized = true
   }
 
-  // Only the create/edit routes are protected; lists stay open to everyone.
+  // Only the create/edit and my-products routes are protected; the open
+  // products list stays available to everyone.
   const isProtected =
     to.path === '/products/add' ||
+    to.path === '/my-products' ||
     to.path === '/categories/add' ||
     /^\/products\/[^/]+\/edit$/.test(to.path)
 

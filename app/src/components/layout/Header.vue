@@ -25,11 +25,12 @@
       <!-- Desktop navigation -->
       <div class="hidden items-center gap-8 md:flex">
         <RouterLink
-          to="/products"
+          to="/my-products"
+          v-if="auth.isAuthenticated"
           active-class="text-white underline underline-offset-4"
           class="text-sm font-medium text-emerald-50 transition hover:text-white"
         >
-          Products
+          My Products
         </RouterLink>
         <RouterLink
           to="/categories"
@@ -94,12 +95,13 @@
     >
       <div class="mx-auto max-w-7xl space-y-1">
         <RouterLink
-          to="/products"
+          to="/my-products"
+          v-if="auth.isAuthenticated"
           active-class="bg-emerald-600 text-white"
           class="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-emerald-600"
           @click="mobileMenuOpen = false"
         >
-          Products
+          My Products
         </RouterLink>
 
         <RouterLink

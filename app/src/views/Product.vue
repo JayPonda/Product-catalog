@@ -1,6 +1,6 @@
 <template>
     <div class="p-8">
-        <Index />
+        <Index :show-controls="false" :my-products="false" />
     </div>
 </template>
 

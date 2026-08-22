@@ -1,8 +1,8 @@
 <template>
     <div class="space-y-6">
 
-        <!-- button for create a new product (authenticated users only) -->
-        <div class="flex items-center justify-end" v-if="auth.isAuthenticated">
+        <!-- button for create a new product (visible on all product pages) -->
+        <div class="flex items-center justify-end">
             <button @click="addProduct"
                 class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                 New Product
@@ -20,7 +20,7 @@
                         <th class="px-4 py-3 font-semibold text-gray-700" v-for="title in scalarTitles"
                             :key="title">{{ title.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) }}</th>
                         <th class="px-4 py-3 font-semibold text-gray-700">Categories</th>
-                        <th class="px-4 py-3 font-semibold text-gray-700" v-if="auth.isAuthenticated"></th>
+                        <th class="px-4 py-3 font-semibold text-gray-700" v-if="showControls"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
@@ -38,7 +38,7 @@
                                     class="text-sm text-gray-400">&mdash;</span>
                             </div>
                         </td>
-                        <td class="relative px-4 py-3 text-right" v-if="auth.isAuthenticated">
+                        <td class="relative px-4 py-3 text-right" v-if="showControls">
                             <button @click="toggleMenu(productData.id)" aria-label="Product actions"
                                 class="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                                 <EllipsisVertical class="h-5 w-5" />
@@ -97,16 +97,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getProducts, deleteProduct } from '@/network/request.js'
-import { useAuthStore } from '@/stores/auth'
+import { getProducts, getMyProducts, deleteProduct } from '@/network/request.js'
 import { EllipsisVertical } from '@lucide/vue'
 
-const router = useRouter()
-const auth = useAuthStore()
+const props = defineProps({
+  showControls: { type: Boolean, default: false },
+  myProducts: { type: Boolean, default: false },
+})
 
-// Scalar columns to render as plain cells; categories get their own tag column.
+const router = useRouter()
+
+// Scalar columns to render as plain cells; categories and ownership get their own columns.
 const scalarTitles = computed(() =>
-  productTableTitle.value.filter((t) => t !== 'categories' && t !== 'deleted_at'),
+  productTableTitle.value.filter(
+    (t) => t !== 'categories' && t !== 'deleted_at' && t !== 'user_id',
+  ),
 )
 
 const curruntPage = ref(0) // offset
@@ -151,7 +156,8 @@ async function removeProduct(product) {
 }
 
 async function fetchProducts() {
-    const response = await getProducts(curruntPage.value, curruntLimit)
+    const fetchFn = props.myProducts ? getMyProducts : getProducts
+    const response = await fetchFn(curruntPage.value, curruntLimit)
     console.log(response.ok, response.data)
     if (response.ok) {
 
