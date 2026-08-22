@@ -89,22 +89,33 @@ $ root/server > air
 ```
 
 #### iii. migration (before server run)
-- we managed the make file for the commands which usavally need in production.
-- currunt migration setup is not sure, it will take this way in future or change. but for now below utilities are available. 
+- Database migrations are managed with [rubenv/sql-migrate](https://github.com/rubenv/sql-migrate), driven by a Cobra-based CLI defined in `server/commands/cmd`. The CLI exposes two top-level commands: `server` (starts the HTTP server) and `migrate` (migration tasks).
+- Day-to-day commands are wrapped in Makefile targets:
 
-1. make mfile to generate new migration file
-2. make mup to migration up 
-3. make mdown to migration down.
+1. `make mfile <name>` — generate a new migration file (scaffolds `-- +migrate Up` / `-- +migrate Down`)
+2. `make mup` — apply all pending migrations
+3. `make mdown [s=N]` — roll back the last migration (`s` = number of steps)
+4. `make mseed` — one-time: register already-applied migrations after switching tools
 
 ```
 $ root/server > make mfile create_category_table
 $ root/server > make mup
 $ root/server > make mdown
+$ root/server > make mseed
 ```
 
-> note: it's always recommended that before starting the server run migration up.
-> note: it should run per deployment, not per server.
-> note: make sure envs are properly configured.
+- The same tasks are also available directly through the CLI:
+
+```
+$ root/server > go run . migrate up
+$ root/server > go run . migrate down --steps 1
+$ root/server > go run . migrate create create_category_table
+$ root/server > go run . server
+```
+
+> note: always run `migrate up` before starting the server.
+> note: migrations should run per deployment, not per server start.
+> note: ensure envs (especially `DB_DIALECT` / `DB_*`) are configured.
 
 #### iv. server (app)
 - to start dev server, you need to do.
@@ -133,3 +144,19 @@ $ root/app > pnpm install
 $ root/app > pnpm dev 
 ```
 
+
+## 2. Tools information
+
+### a. Backend
+
+#### i. Migration — rubenv/sql-migrate
+- **Library:** [github.com/rubenv/sql-migrate](https://github.com/rubenv/sql-migrate)
+- **CLI:** Cobra-based commands in `server/commands/cmd` (no global `migrate` binary required).
+  - `server` — starts the HTTP server (wires env, logger, repositories, services and routes).
+  - `migrate up` — apply all pending migrations.
+  - `migrate down [--steps N]` — roll back `N` migrations (default 1).
+  - `migrate create <name>` — scaffold a new migration file.
+  - `migrate seed` — one-time: mark already-applied migrations (used when switching from the previous tool).
+- **Migration format:** one file per migration containing `-- +migrate Up` and `-- +migrate Down` sections (see `server/migrations/`).
+- **Dialect:** taken from the `DB_DIALECT` env (defaults to `postgres`).
+- **Why this tool:** each migration runs inside a transaction and is only recorded after success, so a failing file is rolled back and never marked applied. Re-running `migrate up` simply retries it — there is no `dirty` state and no manual `force` step.

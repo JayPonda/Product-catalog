@@ -1,3 +1,4 @@
+-- +migrate Up
 CREATE 
     INDEX 
         idx_categories_lower_name
@@ -6,3 +7,8 @@ CREATE
     WHERE 
         deleted_at 
     IS NULL;
+
+-- +migrate Down
+DROP INDEX 
+    IF EXISTS 
+        idx_categories_lower_name;
