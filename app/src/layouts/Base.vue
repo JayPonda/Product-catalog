@@ -1,6 +1,6 @@
 <template>
   <div class="flex min-h-screen flex-col">
-    <Header class="sticky top-0 z-50" :is-logged-in="true" />
+    <Header class="sticky top-0 z-50" />
 
     <main class="mx-auto w-full max-w-7xl flex-1">
       <slot />
