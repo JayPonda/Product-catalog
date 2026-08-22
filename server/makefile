@@ -1,4 +1,4 @@
-.PHONY: mfile mup mseed mdown dev prod swagger
+.PHONY: mfile mup mseed mdown dev prod swagger dedup dedup-dry-range
 
 # 1. Load your existing .env file
 ifneq (,$(wildcard .env))
@@ -47,3 +47,17 @@ prod:
 swagger:
 	swag init -g main.go -o docs --parseDependency --parseInternal
 	@echo "Swagger docs generated at docs/"
+
+# Makefile for the Product Catalog server CLI.
+#
+# Run the duplicate-order removal command. Pass extra flags through ARGS, e.g.:
+#   make dedup ARGS="--dry-run"
+#   make dedup ARGS="--starttime 2024-01-01T00:00:00Z --endtime 2024-01-01T03:00:00Z"
+#   make dedup ARGS="--window 2h30m --nearby 5m --batch 200"
+dedup:
+	go run . dedup-orders-remove $(ARGS)
+
+# Dry-run over an explicit time range. Pass the bounds via START/END (RFC3339):
+#   make dedup-dry-range START="2024-01-01T00:00:00Z" END="2024-01-01T03:00:00Z"
+dedup-dry-range:
+	go run . dedup-orders-remove --dry-run --starttime $(START) --endtime $(END)
