@@ -39,8 +39,10 @@ format-frontend:
 # Set up native git pre-commit and pre-push hooks
 setup-hooks:
 	@mkdir -p .githooks
-	cd scripts/githooks/pre-commit && go build -o ../../../.githooks/pre-commit
-	cd scripts/githooks/pre-push && go build -o ../../../.githooks/pre-push
+	@echo '#!/bin/bash' > .githooks/pre-commit
+	@echo 'node scripts/githooks/pre-commit.js "$$@"' >> .githooks/pre-commit
+	@echo '#!/bin/bash' > .githooks/pre-push
+	@echo 'node scripts/githooks/pre-push.js "$$@"' >> .githooks/pre-push
 	git config core.hooksPath .githooks
 	chmod +x .githooks/pre-commit .githooks/pre-push
 	@echo "✅ Native git hooks configured successfully!"
