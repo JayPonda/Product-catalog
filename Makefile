@@ -1,4 +1,4 @@
-.PHONY: test test-backend test-frontend coverage coverage-backend coverage-frontend lint lint-backend lint-frontend format format-backend format-frontend
+.PHONY: test test-backend test-frontend coverage coverage-backend coverage-frontend lint lint-backend lint-frontend format format-backend format-frontend setup-hooks
 
 # Run both backend and frontend test suites.
 test: test-backend test-frontend
@@ -36,3 +36,15 @@ format-backend:
 format-frontend:
 	pnpm --dir app run format
 
+# Set up native git pre-commit and pre-push hooks
+setup-hooks:
+	@mkdir -p .githooks
+	@echo '#!/bin/bash' > .githooks/pre-commit
+	@echo 'node scripts/githooks/pre-commit.js "$$@"' >> .githooks/pre-commit
+	@echo '#!/bin/bash' > .githooks/pre-push
+	@echo 'node scripts/githooks/pre-push.js "$$@"' >> .githooks/pre-push
+	@echo '#!/bin/bash' > .githooks/commit-msg
+	@echo 'node scripts/githooks/commit-msg.js "$$@"' >> .githooks/commit-msg
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
+	@echo "✅ Native git hooks configured successfully!"

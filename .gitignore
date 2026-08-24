@@ -1,0 +1,11 @@
+# Git Hook Compiled Binary
+.githooks/pre-commit
+.githooks/pre-push
+.githooks/commit-msg
+.githooks/*.log
+
+# Coverage files and folders
+coverage/
+*.out
+cover.html
+*.lcov

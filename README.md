@@ -14,6 +14,7 @@
     - c. frontend setup
         - i. node and vue3
         - ii. server (watcher)
+    - d. git hooks setup
 2. Tools information
     - a. Backend
         - i. migration
@@ -143,6 +144,22 @@ $ root/app > pnpm install
 ```
 $ root/app > pnpm dev 
 ```
+
+### d. Git hooks setup
+
+To automate formatting and linting verification on staged files, run the following setup command from the repository root:
+
+```bash
+$ root > make setup-hooks
+```
+
+This target configures git to use the hooks stored in the `.githooks/` directory and ensures that the pre-commit script is executable.
+
+The pre-commit hook runs the following checks based on the staged files:
+- **Go files**: Runs `gofmt` to verify formatting and `golangci-lint` to check code quality.
+- **Frontend files (JS, TS, Vue, CSS, JSON)**: Runs `prettier --check` to verify formatting, and `oxlint`/`eslint` to check code quality.
+
+If any check fails, the commit will be blocked and the specific errors will be displayed. You can bypass the checks using `git commit --no-verify` if needed.
 
 
 ## 2. Tools information
