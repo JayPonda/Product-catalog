@@ -247,10 +247,10 @@ describe('Product/Index.vue', () => {
       props: { myProducts: false, showControls: false },
     })
     await flushPromises()
-    
+
     wrapper.vm.products = null
     wrapper.vm.next()
-    
+
     expect(errorStore.show).toHaveBeenCalledWith('Something went wrong')
   })
 
@@ -261,10 +261,10 @@ describe('Product/Index.vue', () => {
       props: { myProducts: false, showControls: false },
     })
     await flushPromises()
-    
+
     wrapper.vm.products = null
     wrapper.vm.previous()
-    
+
     expect(errorStore.show).toHaveBeenCalledWith('Something went wrong')
   })
 })

@@ -106,31 +106,33 @@ describe('Header', () => {
   it('closes mobile menu when clicking navigation links', async () => {
     const { wrapper } = await mountHeader()
     const toggle = wrapper.find('button[aria-label="Open menu"]')
-    
+
     await toggle.trigger('click')
-    
+
     const mobileLinks = wrapper.findAll('a').filter((a) => a.text() === 'Categories')
     expect(mobileLinks).toHaveLength(2)
-    
+
     await mobileLinks[1].trigger('click')
     await flushPromises()
-    
-    const categoriesLinksCount = wrapper.findAll('a').filter((a) => a.text() === 'Categories').length
+
+    const categoriesLinksCount = wrapper
+      .findAll('a')
+      .filter((a) => a.text() === 'Categories').length
     expect(categoriesLinksCount).toBe(1)
   })
 
   it('closes mobile menu when clicking login link in mobile menu', async () => {
     const { wrapper } = await mountHeader()
     const toggle = wrapper.find('button[aria-label="Open menu"]')
-    
+
     await toggle.trigger('click')
-    
+
     const loginLinks = wrapper.findAll('a').filter((a) => a.text() === 'Login')
     expect(loginLinks).toHaveLength(2)
-    
+
     await loginLinks[1].trigger('click')
     await flushPromises()
-    
+
     const loginLinksCount = wrapper.findAll('a').filter((a) => a.text() === 'Login').length
     expect(loginLinksCount).toBe(1)
   })

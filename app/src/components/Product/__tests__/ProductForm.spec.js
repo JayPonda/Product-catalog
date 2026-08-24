@@ -41,18 +41,10 @@ describe('ProductForm.vue', () => {
     await flushPromises()
 
     expect(getProduct).toHaveBeenCalledWith('p-1')
-    expect(
-      wrapper.find('input#product-name').element.value,
-    ).toBe('Existing Product')
-    expect(
-      wrapper.find('textarea#product-description').element.value,
-    ).toBe('Existing Description')
-    expect(
-      wrapper.find('input#product-stock').element.value,
-    ).toBe('42')
-    expect(
-      wrapper.find('input#product-price').element.value,
-    ).toBe('99.99')
+    expect(wrapper.find('input#product-name').element.value).toBe('Existing Product')
+    expect(wrapper.find('textarea#product-description').element.value).toBe('Existing Description')
+    expect(wrapper.find('input#product-stock').element.value).toBe('42')
+    expect(wrapper.find('input#product-price').element.value).toBe('99.99')
   })
 
   it('shows error messages for invalid input', async () => {
@@ -77,9 +69,7 @@ describe('ProductForm.vue', () => {
     const wrapper = mount(ProductForm)
 
     await wrapper.find('input#product-name').setValue('New Product')
-    await wrapper.find('textarea#product-description').setValue(
-      'A beautiful product description.',
-    )
+    await wrapper.find('textarea#product-description').setValue('A beautiful product description.')
     await wrapper.find('input#product-stock').setValue('10')
     await wrapper.find('input#product-price').setValue('19.99')
 

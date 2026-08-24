@@ -26,9 +26,7 @@ describe('MyProducts view', () => {
   it('always lists only the user products', () => {
     const { wrapper } = mountView()
 
-    expect(
-      wrapper.find('[data-test="product-index"]').attributes('data-my-products'),
-    ).toBe('true')
+    expect(wrapper.find('[data-test="product-index"]').attributes('data-my-products')).toBe('true')
   })
 
   it('shows controls only when authenticated', async () => {

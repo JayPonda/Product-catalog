@@ -1,4 +1,4 @@
-.PHONY: mfile mup mseed mdown dev prod swagger dedup dedup-dry-range
+.PHONY: mfile mup mseed mdown dev prod swagger dedup dedup-dry-range test coverage cover-html format lint
 
 # 1. Load your existing .env file
 ifneq (,$(wildcard .env))
@@ -79,3 +79,12 @@ coverage:
 # Generate an HTML coverage report and open it.
 cover-html: coverage
 	go tool cover -html=cover.out -o cover.html
+
+# Run formatting on backend files
+format:
+	go fmt ./...
+
+# Run linter on backend files
+lint:
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...
+

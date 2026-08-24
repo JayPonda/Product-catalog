@@ -3,11 +3,7 @@
     <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
       <thead class="bg-gray-50">
         <tr>
-          <th
-            v-for="col in columns"
-            :key="col.key"
-            class="px-4 py-3 font-semibold text-gray-700"
-          >
+          <th v-for="col in columns" :key="col.key" class="px-4 py-3 font-semibold text-gray-700">
             <slot :name="`header-${col.key}`" :column="col">
               {{ col.label }}
             </slot>
@@ -15,16 +11,8 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-200 bg-white">
-        <tr
-          v-for="(item, index) in items"
-          :key="item.id || index"
-          class="hover:bg-gray-50"
-        >
-          <td
-            v-for="col in columns"
-            :key="col.key"
-            class="px-4 py-3 text-gray-900"
-          >
+        <tr v-for="(item, index) in items" :key="item.id || index" class="hover:bg-gray-50">
+          <td v-for="col in columns" :key="col.key" class="px-4 py-3 text-gray-900">
             <slot :name="`cell-${col.key}`" :item="item" :value="item[col.key]" :index="index">
               {{ item[col.key] }}
             </slot>

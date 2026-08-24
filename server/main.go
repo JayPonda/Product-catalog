@@ -59,7 +59,7 @@ func (e *EnvConfig) GetAllowedOrigins() string { return e.AllowedOrigins }
 func (e *EnvConfig) GetAppEnv() string { return e.AppEnv }
 
 // Auth / JWT getters
-func (e *EnvConfig) GetJWTSecret() string          { return e.JWTSecret }
+func (e *EnvConfig) GetJWTSecret() string              { return e.JWTSecret }
 func (e *EnvConfig) GetAccessTokenTTL() time.Duration  { return e.AccessTokenTTL }
 func (e *EnvConfig) GetRefreshTokenTTL() time.Duration { return e.RefreshTokenTTL }
 
@@ -68,7 +68,7 @@ func (e *EnvConfig) GetDSN() string {
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		e.DBHost, e.DBPort, e.DBUser, e.DBPassword, e.DBName, e.DBSSLMode)
 }
-func (e *EnvConfig) GetDialect() string { return e.DBDialect }
+func (e *EnvConfig) GetDialect() string            { return e.DBDialect }
 func (e *EnvConfig) GetMaxOpenConns() int          { return e.DBMaxOpen }
 func (e *EnvConfig) GetMaxIdleConns() int          { return e.DBMaxIdle }
 func (e *EnvConfig) GetMaxLifetime() time.Duration { return e.DBMaxLifetime }

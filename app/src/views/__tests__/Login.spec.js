@@ -55,7 +55,10 @@ describe('Login.vue', () => {
 
   it('calls auth login and redirects to /products on success', async () => {
     const authStore = useAuthStore()
-    vi.spyOn(authStore, 'login').mockResolvedValue({ ok: true, data: { email: 'user@example.com' } })
+    vi.spyOn(authStore, 'login').mockResolvedValue({
+      ok: true,
+      data: { email: 'user@example.com' },
+    })
 
     const wrapper = mount(Login)
     await wrapper.find('input#email').setValue('user@example.com')

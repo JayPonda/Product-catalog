@@ -64,8 +64,7 @@ describe('BaseTable.vue', () => {
     const wrapper = mount(BaseTable, {
       props: { columns, items },
       slots: {
-        'cell-role': (slotProps) =>
-          h('span', { class: 'badge' }, slotProps.value.toUpperCase()),
+        'cell-role': (slotProps) => h('span', { class: 'badge' }, slotProps.value.toUpperCase()),
       },
     })
 

@@ -1,9 +1,9 @@
 package repositories_test
 
 import (
-	"time"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/repositories"

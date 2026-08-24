@@ -143,10 +143,10 @@ func (userRepositoryPtr *UserRepository) CreateRefreshToken(token models.Refresh
 
 	_, err = db.Insert(REFRESH_DB).Rows(
 		goqu.Record{
-			"id":          id,
-			"user_id":     token.UserID,
-			"token_hash":  token.TokenHash,
-			"expires_at":  token.ExpiresAt,
+			"id":         id,
+			"user_id":    token.UserID,
+			"token_hash": token.TokenHash,
+			"expires_at": token.ExpiresAt,
 		},
 	).Executor().Exec()
 

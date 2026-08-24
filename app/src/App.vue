@@ -1,5 +1,5 @@
 <script setup>
-import { defineAsyncComponent } from 'vue';
+import { defineAsyncComponent } from 'vue'
 import { RouterView } from 'vue-router'
 
 // A single layout is used for every route; the Header itself decides what to

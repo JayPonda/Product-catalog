@@ -11,10 +11,10 @@ import (
 
 type fakeExec struct{}
 
-func (fakeExec) From(...interface{}) *goqu.SelectDataset  { return nil }
-func (fakeExec) Insert(interface{}) *goqu.InsertDataset   { return nil }
-func (fakeExec) Update(interface{}) *goqu.UpdateDataset   { return nil }
-func (fakeExec) Delete(interface{}) *goqu.DeleteDataset   { return nil }
+func (fakeExec) From(...interface{}) *goqu.SelectDataset { return nil }
+func (fakeExec) Insert(interface{}) *goqu.InsertDataset  { return nil }
+func (fakeExec) Update(interface{}) *goqu.UpdateDataset  { return nil }
+func (fakeExec) Delete(interface{}) *goqu.DeleteDataset  { return nil }
 
 func TestResolveExecutor(t *testing.T) {
 	db, err := sql.Open("sqlite", "file:exec_test?mode=memory&cache=shared")

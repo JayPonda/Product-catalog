@@ -12,25 +12,29 @@ func NewValidator() *validator.Validate {
 
 	// "letter": field must contain at least one unicode letter,
 	// so values that are only numeric or symbol+numeric are rejected.
-	validate.RegisterValidation("letter", func(fl validator.FieldLevel) bool {
+	if err := validate.RegisterValidation("letter", func(fl validator.FieldLevel) bool {
 		for _, r := range fl.Field().String() {
 			if unicode.IsLetter(r) {
 				return true
 			}
 		}
 		return false
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	// "printable": every rune must be printable, rejecting invisible or
 	// non-renderable characters (control chars, BOM, zero-width, line separators).
-	validate.RegisterValidation("printable", func(fl validator.FieldLevel) bool {
+	if err := validate.RegisterValidation("printable", func(fl validator.FieldLevel) bool {
 		for _, r := range fl.Field().String() {
 			if !unicode.IsPrint(r) {
 				return false
 			}
 		}
 		return true
-	})
+	}); err != nil {
+		panic(err)
+	}
 
 	return validate
 }

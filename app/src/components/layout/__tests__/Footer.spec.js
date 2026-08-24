@@ -6,8 +6,6 @@ describe('Footer', () => {
   it('shows the product name and the current year', () => {
     const wrapper = mount(Footer)
 
-    expect(wrapper.text()).toContain(
-      `© ${new Date().getFullYear()} Product Catalog`,
-    )
+    expect(wrapper.text()).toContain(`© ${new Date().getFullYear()} Product Catalog`)
   })
 })

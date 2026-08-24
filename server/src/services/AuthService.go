@@ -60,7 +60,9 @@ func (authServicePtr *AuthService) Register(req v1.RegisterRequest) (v1.AuthResp
 	if err != nil {
 		return response, err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	user, err := authServicePtr.UserManager.CreateUser(models.User{
 		FirstName: req.FirstName,
@@ -120,7 +122,9 @@ func (authServicePtr *AuthService) Login(req v1.LoginRequest) (LoginResult, erro
 	if err != nil {
 		return result, err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := authServicePtr.UserManager.CreateRefreshToken(models.RefreshToken{
 		UserID:    user.ID,
@@ -146,7 +150,9 @@ func (authServicePtr *AuthService) Logout(userID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := authServicePtr.UserManager.DeleteRefreshTokensByUser(userID, tx); err != nil {
 		return err

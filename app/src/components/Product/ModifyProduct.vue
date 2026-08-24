@@ -1,28 +1,26 @@
 <template>
   <div class="space-y-6">
     <!-- error alert -->
-    <div v-if="error" role="alert"
-      class="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div
+      v-if="error"
+      role="alert"
+      class="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
       <span>{{ error }}</span>
-      <button @click="error = ''" aria-label="Dismiss"
-        class="ml-4 rounded p-1 leading-none text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 focus:outline-none">
+      <button
+        @click="error = ''"
+        aria-label="Dismiss"
+        class="ml-4 rounded p-1 leading-none text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 focus:outline-none"
+      >
         &#10005;
       </button>
     </div>
 
     <!-- Product Details Form -->
-    <ProductForm
-      :productId="productId"
-      @saved="onProductSaved"
-      @error="onError"
-    />
+    <ProductForm :productId="productId" @saved="onProductSaved" @error="onError" />
 
     <!-- Category Manager (Only visible once product is saved) -->
-    <CategoryLinker
-      v-if="productId"
-      :productId="productId"
-      @error="onError"
-    />
+    <CategoryLinker v-if="productId" :productId="productId" @error="onError" />
   </div>
 </template>
 
@@ -51,7 +49,7 @@ function onProductSaved(savedProduct) {
   router.push({
     name: 'products-modify',
     params: { id: savedProduct.id },
-    hash: '#category'
+    hash: '#category',
   })
 }
 </script>

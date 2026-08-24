@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rubenv/sql-migrate"
 	_ "github.com/lib/pq" // register the postgres driver for database/sql
+	"github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
 )
 

@@ -1,7 +1,7 @@
 <template>
-    <div class="p-8">
-        <Index :show-controls="auth.isAuthenticated" :my-products="true" />
-    </div>
+  <div class="p-8">
+    <Index :show-controls="auth.isAuthenticated" :my-products="true" />
+  </div>
 </template>
 
 <script setup>

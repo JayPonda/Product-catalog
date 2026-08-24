@@ -62,6 +62,9 @@ func (productServicePtr *ProductService) GetProductById(id uuid.UUID) (v1.Respon
 	}
 
 	categories, err := productServicePtr.getProductsCategory(id)
+	if err != nil {
+		return responseProduct, err
+	}
 
 	responseProduct.Product = products
 	responseProduct.Categories = categories
@@ -78,6 +81,9 @@ func (productServicePtr *ProductService) GetProductByName(name string) (v1.Respo
 	}
 
 	categories, err := productServicePtr.getProductsCategory(products.ID)
+	if err != nil {
+		return responseProduct, err
+	}
 
 	responseProduct.Product = products
 	responseProduct.Categories = categories
@@ -163,7 +169,9 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 		return v1.ResponseProduct{}, err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	dbProduct, err := productServicePtr.ProductManager.CreateProduct(models.Product{
 		Name:          product.Name,
@@ -265,7 +273,9 @@ func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.
 		return v1.ResponseProduct{}, err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	_, err = productServicePtr.ProductManager.UpdateProduct(id, models.Product{
 		Name:          product.Name,
@@ -311,7 +321,9 @@ func (productServicePtr *ProductService) LinkCategory(productID uuid.UUID, categ
 		return response, err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := productServicePtr.ProductCategoryManager.LinkCategory(productID, categoryID, tx); err != nil {
 		return response, err
@@ -347,7 +359,9 @@ func (productServicePtr *ProductService) UnlinkCategory(productID uuid.UUID, cat
 		return response, err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := productServicePtr.ProductCategoryManager.UnlinkCategory(productID, categoryID, tx); err != nil {
 		return response, err
@@ -366,7 +380,9 @@ func (productServicePtr *ProductService) DeleteProduct(id uuid.UUID) error {
 		return err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	err = productServicePtr.ProductManager.DeleteProduct(id, tx)
 	if err != nil {

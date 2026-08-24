@@ -10,18 +10,29 @@
           No categories linked yet.
         </div>
         <div v-else class="flex flex-wrap gap-2">
-          <span v-for="category in visibleLinkedCategories" :key="category.id"
-            class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+          <span
+            v-for="category in visibleLinkedCategories"
+            :key="category.id"
+            class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700"
+          >
             {{ category.name }}
-            <button type="button" @click="unlinkProductCategory(category)"
+            <button
+              type="button"
+              @click="unlinkProductCategory(category)"
               :disabled="busyCategoryId === category.id"
               class="rounded-full text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-emerald-700 focus:outline-none disabled:opacity-50"
-              aria-label="Unlink category">&#10005;</button>
+              aria-label="Unlink category"
+            >
+              &#10005;
+            </button>
           </span>
         </div>
-        <button v-if="linkedCategories.length > linkedVisibleCount" type="button"
+        <button
+          v-if="linkedCategories.length > linkedVisibleCount"
+          type="button"
           @click="linkedVisibleCount += 20"
-          class="mt-3 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+          class="mt-3 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
           Load more
         </button>
       </div>
@@ -35,24 +46,40 @@
       <div class="space-y-4 p-4">
         <div class="flex items-center gap-2">
           <div class="relative">
-            <input type="search" v-model="categorySearch" placeholder="Search category..."
-              class="w-48 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" />
+            <input
+              type="search"
+              v-model="categorySearch"
+              placeholder="Search category..."
+              class="w-48 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            />
             <!-- dropdown with matching categories -->
-            <ul v-if="categoryDropdownOpen"
-              class="absolute right-0 z-10 mt-1 max-h-60 w-56 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-              <li v-if="visibleCategoryResults.length === 0" class="px-3 py-2 text-sm text-gray-400">
+            <ul
+              v-if="categoryDropdownOpen"
+              class="absolute right-0 z-10 mt-1 max-h-60 w-56 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            >
+              <li
+                v-if="visibleCategoryResults.length === 0"
+                class="px-3 py-2 text-sm text-gray-400"
+              >
                 No matching categories
               </li>
               <li v-else v-for="category in visibleCategoryResults" :key="category.id">
-                <button type="button" @mousedown.prevent="pickCategory(category)"
-                  class="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50">
+                <button
+                  type="button"
+                  @mousedown.prevent="pickCategory(category)"
+                  class="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
                   {{ category.name }}
                 </button>
               </li>
             </ul>
           </div>
-          <button type="button" @click="addCategories" :disabled="addingCategories"
-            class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50">
+          <button
+            type="button"
+            @click="addCategories"
+            :disabled="addingCategories"
+            class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
+          >
             Link category
           </button>
         </div>
@@ -61,12 +88,20 @@
           Search and select categories to link.
         </div>
         <div v-else class="flex flex-wrap gap-2">
-          <span v-for="category in pendingCategories" :key="category.id"
-            class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+          <span
+            v-for="category in pendingCategories"
+            :key="category.id"
+            class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700"
+          >
             {{ category.name }}
-            <button type="button" @click="removePending(category)"
+            <button
+              type="button"
+              @click="removePending(category)"
               class="rounded-full text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 focus:outline-none"
-              aria-label="Remove from selection">&#10005;</button>
+              aria-label="Remove from selection"
+            >
+              &#10005;
+            </button>
           </span>
         </div>
       </div>

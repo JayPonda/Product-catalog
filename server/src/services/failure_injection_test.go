@@ -197,7 +197,9 @@ func TestOrderService_RemoveOrdersTx_DeleteFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if _, err := svc.RemoveOrdersTx(tx, []uuid.UUID{uuid.New()}); err == nil {
 		t.Error("expected delete failure to propagate")

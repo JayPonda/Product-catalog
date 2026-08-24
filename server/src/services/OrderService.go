@@ -66,7 +66,9 @@ func (orderServicePtr *OrderService) RemoveOrder(id uuid.UUID) error {
 		return err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := orderServicePtr.OrderManager.DeleteOrder(id, tx); err != nil {
 		if err == sql.ErrNoRows {
@@ -96,7 +98,9 @@ func (orderServicePtr *OrderService) InTx(fn func(tx *goqu.TxDatabase) error) er
 		return err
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if err := fn(tx); err != nil {
 		return err

@@ -30,62 +30,59 @@ import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
 import { useAuthStore } from '@/stores/auth'
 
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: "/categories",
+      path: '/categories',
       name: 'categories',
       component: Category,
     },
     {
-      path: "/categories/add",
+      path: '/categories/add',
       name: 'categories-add',
       component: ModifyCategory,
     },
     {
-      path: "/products",
+      path: '/products',
       name: 'products',
       component: Product,
     },
     {
-      path: "/my-products",
+      path: '/my-products',
       name: 'my-products',
       component: MyProducts,
     },
     {
-      path: "/products/add",
+      path: '/products/add',
       name: 'products-create',
       component: ModifyProduct,
     },
     {
-      path: "/products/:id/edit",
+      path: '/products/:id/edit',
       name: 'products-modify',
       component: ModifyProduct,
     },
     {
-      path: "/login",
+      path: '/login',
       name: 'login',
       component: Login,
     },
     {
-      path: "/register",
+      path: '/register',
       name: 'register',
       component: Register,
     },
     {
-      path: "/",
-      name: "home",
-      component:  Home,
-    }
+      path: '/',
+      name: 'home',
+      component: Home,
+    },
   ],
   scrollBehavior(to, from, savedPosition) {
     if (to.hash) {
       // the destination view may not be mounted yet, so wait for the anchor to appear
-      return waitForElement(to.hash).then((el) =>
-        el ? { el, behavior: 'smooth' } : false
-      )
+      return waitForElement(to.hash).then((el) => (el ? { el, behavior: 'smooth' } : false))
     }
     return savedPosition ?? { top: 0 }
   },

@@ -72,7 +72,10 @@ describe('Register.vue', () => {
 
   it('calls auth register and redirects to /login on success', async () => {
     const authStore = useAuthStore()
-    vi.spyOn(authStore, 'register').mockResolvedValue({ ok: true, data: { email: 'john.doe@example.com' } })
+    vi.spyOn(authStore, 'register').mockResolvedValue({
+      ok: true,
+      data: { email: 'john.doe@example.com' },
+    })
 
     const wrapper = mount(Register)
     await wrapper.find('input#first_name').setValue('John')

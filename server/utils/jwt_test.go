@@ -30,7 +30,9 @@ func TestHashToken(t *testing.T) {
 	if got := HashToken("abc"); got != wantHex {
 		t.Errorf("HashToken = %q, want %q", got, wantHex)
 	}
-	if HashToken("abc") != HashToken("abc") {
+	h1 := HashToken("abc")
+	h2 := HashToken("abc")
+	if h1 != h2 {
 		t.Error("HashToken should be stable")
 	}
 }

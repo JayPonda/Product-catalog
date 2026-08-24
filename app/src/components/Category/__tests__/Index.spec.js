@@ -198,10 +198,10 @@ describe('Category/Index.vue', () => {
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index)
     await flushPromises()
-    
+
     wrapper.vm.categories = null
     wrapper.vm.next()
-    
+
     expect(errorStore.show).toHaveBeenCalledWith('Something went wrong')
   })
 
@@ -210,10 +210,10 @@ describe('Category/Index.vue', () => {
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index)
     await flushPromises()
-    
+
     wrapper.vm.categories = null
     wrapper.vm.previous()
-    
+
     expect(errorStore.show).toHaveBeenCalledWith('Something went wrong')
   })
 })

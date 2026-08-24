@@ -1,25 +1,16 @@
 <template>
-  <header
-    class="border-b border-emerald-900/10 bg-emerald-700 text-white shadow-sm"
-  >
+  <header class="border-b border-emerald-900/10 bg-emerald-700 text-white shadow-sm">
     <nav
       class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
       aria-label="Main navigation"
     >
       <!-- Logo -->
-      <RouterLink
-        to="/"
-        class="flex items-center gap-2"
-      >
-        <div
-          class="flex size-9 items-center justify-center rounded-lg bg-white text-emerald-700"
-        >
+      <RouterLink to="/" class="flex items-center gap-2">
+        <div class="flex size-9 items-center justify-center rounded-lg bg-white text-emerald-700">
           <Package class="size-5" />
         </div>
 
-        <span class="text-lg font-bold tracking-tight">
-          Product Catalog
-        </span>
+        <span class="text-lg font-bold tracking-tight"> Product Catalog </span>
       </RouterLink>
 
       <!-- Desktop navigation -->
@@ -76,15 +67,9 @@
         aria-label="Open menu"
         @click="mobileMenuOpen = !mobileMenuOpen"
       >
-        <X
-          v-if="mobileMenuOpen"
-          class="size-6"
-        />
+        <X v-if="mobileMenuOpen" class="size-6" />
 
-        <Menu
-          v-else
-          class="size-6"
-        />
+        <Menu v-else class="size-6" />
       </button>
     </nav>
 
@@ -150,11 +135,7 @@
 import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import {
-  Package,
-  Menu,
-  X,
-} from '@lucide/vue'
+import { Package, Menu, X } from '@lucide/vue'
 
 const mobileMenuOpen = ref(false)
 const router = useRouter()

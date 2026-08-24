@@ -1,40 +1,92 @@
 <template>
-  <form class="space-y-4 rounded-lg border border-gray-200 bg-white p-6" @submit.prevent="saveProduct">
+  <form
+    class="space-y-4 rounded-lg border border-gray-200 bg-white p-6"
+    @submit.prevent="saveProduct"
+  >
     <div>
-      <label for="product-name" class="block text-sm font-medium text-gray-700">Product name <span class="text-red-500">*</span></label>
-      <input id="product-name" type="text" v-model="formData.name" @input="fieldErrors.name = ''"
-        :class="['mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2', fieldErrors.name ? 'border border-red-300 focus-visible:ring-red-500' : 'border border-gray-300 focus-visible:ring-emerald-500']" />
+      <label for="product-name" class="block text-sm font-medium text-gray-700"
+        >Product name <span class="text-red-500">*</span></label
+      >
+      <input
+        id="product-name"
+        type="text"
+        v-model="formData.name"
+        @input="fieldErrors.name = ''"
+        :class="[
+          'mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2',
+          fieldErrors.name
+            ? 'border border-red-300 focus-visible:ring-red-500'
+            : 'border border-gray-300 focus-visible:ring-emerald-500',
+        ]"
+      />
       <p v-if="fieldErrors.name" class="mt-1 text-sm text-red-600">{{ fieldErrors.name }}</p>
     </div>
 
     <div>
-      <label for="product-description" class="block text-sm font-medium text-gray-700">Description <span class="text-red-500">*</span></label>
-      <textarea id="product-description" v-model="formData.description" rows="3"
-        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"></textarea>
-      <p v-if="fieldErrors.description" class="mt-1 text-sm text-red-600">{{ fieldErrors.description }}</p>
+      <label for="product-description" class="block text-sm font-medium text-gray-700"
+        >Description <span class="text-red-500">*</span></label
+      >
+      <textarea
+        id="product-description"
+        v-model="formData.description"
+        rows="3"
+        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+      ></textarea>
+      <p v-if="fieldErrors.description" class="mt-1 text-sm text-red-600">
+        {{ fieldErrors.description }}
+      </p>
     </div>
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
-        <label for="product-stock" class="block text-sm font-medium text-gray-700">Stock quantity <span class="text-red-500">*</span></label>
-        <input id="product-stock" type="number" min="0" v-model="formData.stock_quantity"
+        <label for="product-stock" class="block text-sm font-medium text-gray-700"
+          >Stock quantity <span class="text-red-500">*</span></label
+        >
+        <input
+          id="product-stock"
+          type="number"
+          min="0"
+          v-model="formData.stock_quantity"
           @input="fieldErrors.stock_quantity = ''"
-          :class="['mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2', fieldErrors.stock_quantity ? 'border border-red-300 focus-visible:ring-red-500' : 'border border-gray-300 focus-visible:ring-emerald-500']" />
-        <p v-if="fieldErrors.stock_quantity" class="mt-1 text-sm text-red-600">{{ fieldErrors.stock_quantity }}</p>
+          :class="[
+            'mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2',
+            fieldErrors.stock_quantity
+              ? 'border border-red-300 focus-visible:ring-red-500'
+              : 'border border-gray-300 focus-visible:ring-emerald-500',
+          ]"
+        />
+        <p v-if="fieldErrors.stock_quantity" class="mt-1 text-sm text-red-600">
+          {{ fieldErrors.stock_quantity }}
+        </p>
       </div>
 
       <div>
-        <label for="product-price" class="block text-sm font-medium text-gray-700">Price <span class="text-red-500">*</span></label>
-        <input id="product-price" type="number" min="0" step="0.01" v-model="formData.price"
+        <label for="product-price" class="block text-sm font-medium text-gray-700"
+          >Price <span class="text-red-500">*</span></label
+        >
+        <input
+          id="product-price"
+          type="number"
+          min="0"
+          step="0.01"
+          v-model="formData.price"
           @input="fieldErrors.price = ''"
-          :class="['mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2', fieldErrors.price ? 'border border-red-300 focus-visible:ring-red-500' : 'border border-gray-300 focus-visible:ring-emerald-500']" />
+          :class="[
+            'mt-1 block w-full rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2',
+            fieldErrors.price
+              ? 'border border-red-300 focus-visible:ring-red-500'
+              : 'border border-gray-300 focus-visible:ring-emerald-500',
+          ]"
+        />
         <p v-if="fieldErrors.price" class="mt-1 text-sm text-red-600">{{ fieldErrors.price }}</p>
       </div>
     </div>
 
     <div class="flex items-center justify-end">
-      <button type="submit"
-        class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+      <button
+        type="submit"
+        class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+      >
         Save Product
       </button>
     </div>
@@ -58,14 +110,14 @@ const formData = reactive({
   name: '',
   description: '',
   stock_quantity: '',
-  price: ''
+  price: '',
 })
 
 const fieldErrors = reactive({
   name: '',
   description: '',
   stock_quantity: '',
-  price: ''
+  price: '',
 })
 
 async function fetchProductInformation() {
@@ -82,8 +134,10 @@ async function fetchProductInformation() {
   }
 }
 
-// oxlint-disable-next-line no-control-regex -- intentional detection of control/invisible characters
-const INVISIBLE_CHARS = new RegExp('[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u2028\\u2029\\uFEFF]')
+ 
+const INVISIBLE_CHARS = new RegExp(
+  '[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u2028\\u2029\\uFEFF]',
+)
 function hasInvisibleChars(value) {
   return INVISIBLE_CHARS.test(value)
 }
@@ -130,7 +184,12 @@ function validateForm() {
     }
   }
 
-  return !fieldErrors.name && !fieldErrors.description && !fieldErrors.stock_quantity && !fieldErrors.price
+  return (
+    !fieldErrors.name &&
+    !fieldErrors.description &&
+    !fieldErrors.stock_quantity &&
+    !fieldErrors.price
+  )
 }
 
 async function saveProduct() {

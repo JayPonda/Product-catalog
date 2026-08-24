@@ -18,9 +18,9 @@ const (
 )
 
 type AuthController struct {
-	Service        *services.AuthService
-	Validator      *validator.Validate
-	SecureCookies  bool
+	Service       *services.AuthService
+	Validator     *validator.Validate
+	SecureCookies bool
 }
 
 func NewAuthController(service *services.AuthService, secureCookies bool) *AuthController {
