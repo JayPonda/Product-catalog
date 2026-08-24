@@ -22,12 +22,13 @@ const (
 
 // Task defines a check to run.
 type Task struct {
-	Name      string
-	Dir       string   // Directory from which this task runs (e.g. "server" or "app"). Empty means root.
-	Pattern   string   // Comma-separated list of file extensions/suffixes to match
-	DependsOn []string // List of Task Names this task depends on
-	Skip      bool     // If true, skip this task but allow dependent tasks to run
-	Check     func(dir string, files []string) error
+	Name       string
+	Dir        string   // Directory from which this task runs (e.g. "server" or "app"). Empty means root.
+	Pattern    string   // Comma-separated list of file extensions/suffixes to match
+	DependsOn  []string // List of Task Names this task depends on
+	Skip       bool     // If true, skip this task but allow dependent tasks to run
+	PluginName string   // Reusable plugin check name (e.g., "gofmt", "prettier")
+	Check      func(e *Engine, dir string, files []string) error
 }
 
 // Engine manages and executes tasks.
@@ -65,6 +66,20 @@ func (e *Engine) Logln(a ...interface{}) {
 	}
 }
 
+// Global plugins registry
+var pluginsRegistry = make(map[string]func(e *Engine, dir string, files []string) error)
+
+// RegisterPlugin registers a plugin check function by name.
+func RegisterPlugin(name string, check func(e *Engine, dir string, files []string) error) {
+	pluginsRegistry[name] = check
+}
+
+// GetPlugin retrieves a registered plugin check function.
+func GetPlugin(name string) (func(e *Engine, dir string, files []string) error, bool) {
+	check, exists := pluginsRegistry[name]
+	return check, exists
+}
+
 // Run executes all tasks matching files resolved by FileResolver, in dependency order.
 func (e *Engine) Run() {
 	// Dynamically resolve log file path (e.g., .githooks/pre-commit.log)
@@ -75,6 +90,22 @@ func (e *Engine) Run() {
 		defer e.logFile.Close()
 	} else {
 		fmt.Printf("⚠️ Warning: Could not create log file %s: %v. Running checks without file logging.\n", logPath, err)
+	}
+
+	// Resolve Plugin Check functions
+	for i := range e.Tasks {
+		task := &e.Tasks[i]
+		if task.Check == nil && task.PluginName != "" {
+			check, exists := GetPlugin(task.PluginName)
+			if !exists {
+				e.Logf("❌ Error: Plugin '%s' for task '%s' not found in registry.\n", task.PluginName, task.Name)
+				if e.logFile != nil {
+					_ = e.logFile.Close()
+				}
+				os.Exit(1)
+			}
+			task.Check = check
+		}
 	}
 
 	if e.FileResolver == nil {
@@ -198,7 +229,7 @@ func (e *Engine) Run() {
 				dirPath = "."
 			}
 
-			if err := task.Check(dirPath, matched); err != nil {
+			if err := task.Check(e, dirPath, matched); err != nil {
 				e.Logf("❌ Task '%s' failed: %v\n", task.Name, err)
 				status[task.Name] = StatusFailed
 				hasFailures = true
