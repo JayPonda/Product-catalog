@@ -82,13 +82,13 @@ class Engine {
   }
 
   run(filesResolver, args = []) {
-    // Resolve log file path (.githooks/<hook-name>.log)
+    // Resolve log file path (.githooks/tmp/<hook-name>.log)
     const hookName = path.basename(process.argv[1], '.js');
-    const githooksDir = path.resolve(__dirname, '../../.githooks');
-    if (!fs.existsSync(githooksDir)) {
-      fs.mkdirSync(githooksDir, { recursive: true });
+    const logDir = path.resolve(__dirname, '../../.githooks/tmp');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
     }
-    this.logPath = path.join(githooksDir, `${hookName}.log`);
+    this.logPath = path.join(logDir, `${hookName}.log`);
 
     try {
       this.logFile = fs.openSync(this.logPath, 'w');
@@ -99,7 +99,7 @@ class Engine {
     const exit = (code) => {
       if (this.logFile) {
         fs.closeSync(this.logFile);
-        console.log(`📝 Full logs written to: .githooks/${hookName}.log. You can review it anytime!`);
+        console.log(`📝 Full logs written to: .githooks/tmp/${hookName}.log. You can review it anytime!`);
       }
       process.exit(code);
     };
