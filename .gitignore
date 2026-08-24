@@ -3,6 +3,7 @@
 .githooks/pre-push
 .githooks/commit-msg
 .githooks/*.log
+.githooks/tmp/
 
 # Coverage files and folders
 coverage/
