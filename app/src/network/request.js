@@ -1,10 +1,3 @@
-function getBaseUrl(prefix, url, queryparams) {
-  const finalUrl = new URL(import.meta.env.VITE_BACKEND_URL + prefix + url)
-  const params = new URLSearchParams(queryparams)
-  finalUrl.search = params.toString()
-  return finalUrl.toString()
-}
-
 // Cookie-based auth requires credentials to be sent on every request.
 const DEFAULT_OPTS = {
   credentials: 'include',
@@ -15,435 +8,122 @@ const DEFAULT_OPTS = {
 
 const V1 = '/api/v1'
 
-export async function getCategories(page, limit) {
+function buildUrl(path, params) {
+  const finalUrl = new URL(import.meta.env.VITE_BACKEND_URL + V1 + path)
+  finalUrl.search = new URLSearchParams(params).toString()
+  return finalUrl.toString()
+}
+
+async function request(path, { params, rawData, defaultError, ...options } = {}) {
+  try {
+    const response = await fetch(buildUrl(path, params), { ...DEFAULT_OPTS, ...options })
+
+    if (!response.ok) {
+      if (defaultError === undefined) {
+        return { ok: false, error: response.status }
+      }
+      const body = await response.json().catch(() => ({}))
+      return { ok: false, error: response.status, message: body.error ?? defaultError }
+    }
+
+    if (rawData !== undefined) {
+      return { ok: true, data: rawData }
+    }
+
+    return { ok: true, data: await response.json() }
+  } catch (error) {
+    console.error(error)
+    return { ok: false, error }
+  }
+}
+
+export function getCategories(page, limit) {
   const offset = page * limit
-
-  try {
-    const response = await fetch(getBaseUrl(V1, '/categories', { limit, offset }), DEFAULT_OPTS)
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+  return request('/categories', { params: { limit, offset } })
 }
 
-export async function getProducts(page, limit) {
+export function getProducts(page, limit) {
   const offset = page * limit
-
-  try {
-    const response = await fetch(getBaseUrl(V1, '/products', { limit, offset }), DEFAULT_OPTS)
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+  return request('/products', { params: { limit, offset } })
 }
 
-export async function getMyProducts(page, limit) {
+export function getMyProducts(page, limit) {
   const offset = page * limit
-
-  try {
-    const response = await fetch(
-      getBaseUrl(V1, '/my-products', { limit, offset }),
-      DEFAULT_OPTS,
-    )
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+  return request('/my-products', { params: { limit, offset } })
 }
 
-export async function createCategory(categoryName) {
-  try {
-    const response = await fetch(
-      getBaseUrl(V1, '/categories'),
-      {
-        ...DEFAULT_OPTS,
-        method: 'POST',
-        body: JSON.stringify({ name: categoryName }),
-      },
-    )
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function searchCategory(name) {
+  return request('/categories/match', { params: { name } })
 }
 
-export async function deleteProduct(productId) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/${productId}`), {
-      ...DEFAULT_OPTS,
-      method: 'DELETE',
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    return {
-      ok: true,
-      data: 'Product deleted successfully',
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function createCategory(categoryName) {
+  return request('/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name: categoryName }),
+  })
 }
 
-export async function getProduct(productId) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/${productId}`), DEFAULT_OPTS)
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function getProduct(productId) {
+  return request(`/products/${productId}`)
 }
 
-export async function createProduct(productInfo) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/`), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-      body: JSON.stringify(productInfo),
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function createProduct(productInfo) {
+  return request('/products/', {
+    method: 'POST',
+    body: JSON.stringify(productInfo),
+  })
 }
 
-export async function updateProduct(productId, productInfo) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/${productId}`), {
-      ...DEFAULT_OPTS,
-      method: 'PUT',
-      body: JSON.stringify(productInfo),
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function updateProduct(productId, productInfo) {
+  return request(`/products/${productId}`, {
+    method: 'PUT',
+    body: JSON.stringify(productInfo),
+  })
 }
 
-export async function linkCategory(productId, categoryId) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/${productId}/categories/link`), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-      body: JSON.stringify({ category_id: categoryId }),
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    return {
-      ok: true,
-      data: 'Category linked successfully',
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function deleteProduct(productId) {
+  return request(`/products/${productId}`, {
+    method: 'DELETE',
+    rawData: 'Product deleted successfully',
+  })
 }
 
-export async function unlinkCategory(productId, categoryId) {
-  try {
-    const response = await fetch(getBaseUrl(V1, `/products/${productId}/categories/unlink`), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-      body: JSON.stringify({ category_id: categoryId }),
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    return {
-      ok: true,
-      data: 'Category unlinked successfully',
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function linkCategory(productId, categoryId) {
+  return request(`/products/${productId}/categories/link`, {
+    method: 'POST',
+    body: JSON.stringify({ category_id: categoryId }),
+    rawData: 'Category linked successfully',
+  })
 }
 
-export async function searchCategory(categoryletter) {
-  try {
-    const response = await fetch(
-      getBaseUrl(V1, `/categories/match`, { name: categoryletter }),
-      DEFAULT_OPTS,
-    )
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function unlinkCategory(productId, categoryId) {
+  return request(`/products/${productId}/categories/unlink`, {
+    method: 'POST',
+    body: JSON.stringify({ category_id: categoryId }),
+    rawData: 'Category unlinked successfully',
+  })
 }
 
-// ----- Auth -----
-
-export async function registerUser(payload) {
-  try {
-    const response = await fetch(getBaseUrl(V1, '/auth/register'), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      return {
-        ok: false,
-        error: response.status,
-        message: data.error ?? 'Registration failed',
-      }
-    }
-
-    const data = await response.json()
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function registerUser(payload) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    defaultError: 'Registration failed',
+  })
 }
 
-export async function loginUser(payload) {
-  try {
-    const response = await fetch(getBaseUrl(V1, '/auth/login'), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      return {
-        ok: false,
-        error: response.status,
-        message: data.error ?? 'Login failed',
-      }
-    }
-
-    const data = await response.json()
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function loginUser(payload) {
+  return request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    defaultError: 'Login failed',
+  })
 }
 
-export async function logoutUser() {
-  try {
-    const response = await fetch(getBaseUrl(V1, '/auth/logout'), {
-      ...DEFAULT_OPTS,
-      method: 'POST',
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    return {
-      ok: true,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function logoutUser() {
+  return request('/auth/logout', { method: 'POST', rawData: null })
 }
 
-export async function getCurrentUser() {
-  try {
-    const response = await fetch(getBaseUrl(V1, '/auth/me'), DEFAULT_OPTS)
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: response.status,
-      }
-    }
-
-    const data = await response.json()
-    return {
-      ok: true,
-      data: data,
-    }
-  } catch (error) {
-    console.error(error)
-    return {
-      ok: false,
-      error: error,
-    }
-  }
+export function getCurrentUser() {
+  return request('/auth/me')
 }

@@ -61,3 +61,21 @@ dedup:
 #   make dedup-dry-range START="2024-01-01T00:00:00Z" END="2024-01-01T03:00:00Z"
 dedup-dry-range:
 	go run . dedup-orders-remove --dry-run --starttime $(START) --endtime $(END)
+
+# Run all backend unit + e2e tests.
+test:
+	go test ./... -count=1
+
+# Run backend tests with a coverage report (function-level).
+# -coverpkg attributes statements executed from other packages (e.g. controllers
+# and middleware exercised via the routes E2E tests) to their own package.
+COVPKGS := ./src/repositories/...,./src/services/...,./src/controllers/...,./src/middleware/...,./src/routes/...,./utils/...
+
+coverage:
+	go test ./... -count=1 -coverpkg='$(COVPKGS)' -coverprofile=cover.out
+	go tool cover -func=cover.out | tail -1
+	go tool cover -func=cover.out
+
+# Generate an HTML coverage report and open it.
+cover-html: coverage
+	go tool cover -html=cover.out -o cover.html

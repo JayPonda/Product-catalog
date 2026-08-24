@@ -2,7 +2,8 @@
   <div class="flex min-h-screen flex-col">
     <Header class="sticky top-0 z-50" />
 
-    <main class="mx-auto w-full max-w-7xl flex-1">
+    <main class="mx-auto w-full max-w-7xl flex-1 pt-12">
+      <ErrorBanner />
       <slot />
     </main>
 
@@ -13,4 +14,5 @@
 <script setup>
 import Header from '@/components/layout/Header.vue'
 import Footer from '@/components/layout/Footer.vue'
+import ErrorBanner from '@/components/layout/ErrorBanner.vue'
 </script>

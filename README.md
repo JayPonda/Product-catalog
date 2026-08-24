@@ -160,3 +160,51 @@ $ root/app > pnpm dev
 - **Migration format:** one file per migration containing `-- +migrate Up` and `-- +migrate Down` sections (see `server/migrations/`).
 - **Dialect:** taken from the `DB_DIALECT` env (defaults to `postgres`).
 - **Why this tool:** each migration runs inside a transaction and is only recorded after success, so a failing file is rolled back and never marked applied. Re-running `migrate up` simply retries it — there is no `dirty` state and no manual `force` step.
+
+## Testing & coverage
+
+Run everything from the repo root via the root Makefile:
+
+```
+$ root > make test            # backend + frontend suites
+$ root > make coverage        # both coverage reports
+```
+
+### a. Backend (`server/`)
+
+| Command | What it does |
+|---|---|
+| `make test` | runs all Go unit + E2E tests |
+| `make coverage` | same, plus a function-level coverage table |
+| `make cover-html` | generates `cover.html` (per-line browser report) |
+
+**Strategy — real database, zero mocks where it matters.**
+Tests run against real in-memory SQLite databases ([modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite), pure Go, no CGO) with a schema mirrored from the production Postgres migrations, including the partial unique indexes (`uq_products_name_active`, `uq_categories_name_active`, `uq_users_email_active`). The helper lives in `server/testdb/testdb.go`:
+
+- `testdb.OpenSQLite(t)` — isolated per-test DB, schema applied, auto-closed
+- `testdb.SeedOrder` / `SeedProduct` — deterministic fixture inserts
+
+Layered bottom-up:
+
+1. **utils** — logger, JWT round-trips/expiry/wrong-secret, UUID, name normalization, validator rules
+2. **repositories** — CRUD, soft-delete visibility, pagination ordering, refresh-token lifecycle, tombstone reactivation on re-link; plus `go-sqlmock` unit tests for query shapes
+3. **services** — transactions verified end-to-end (commit *and* rollback paths), duplicate-name pre-check + constraint races, category hydration, auth (bcrypt, token issuance/revocation)
+4. **routes** (E2E) — the whole stack over HTTP via fiber's `app.Test`: registration → login cookies → guarded product CRUD → link/unlink → logout cookie clearing; status-code contract asserted per route
+5. **commands/cmd** (`dedup-orders-remove`) — pure-function tests for clustering/splitting, E2E runs of the real pipeline over SQLite (keep-latest verified in the DB, dry-run leaves rows intact), and a fault-injecting store stub proving each chunk's scan+delete is all-or-nothing: a mid-scan or mid-delete failure rolls back before anything is applied. Chunks are independent and reruns are idempotent (verified by executing the full run twice)
+
+> note: the mirrored SQLite schema requires time columns written as `time.Time` values and non-NULL text for plain-Go model fields — see comments in `testdb/testdb.go`.
+
+### b. Frontend (`app/`)
+
+| Command | What it does |
+|---|---|
+| `pnpm test:unit` | Vitest in watch mode |
+| `pnpm test:unit -- --run` | single pass (CI style) |
+| `pnpm coverage` | V8 coverage, text + HTML (`coverage/index.html`) |
+
+Layers covered:
+
+1. **network** (`src/network/request.js`) — URL/method/body/credentials for every endpoint wrapper, `{ ok, data | error }` result shape on success, HTTP error statuses, network failures, and error-message extraction for auth calls
+2. **stores** (`src/stores/auth.ts`) — login/register/logout/fetchMe state transitions including failure paths leaving state untouched
+3. **components** — `Header.vue`: logged-in vs logged-out UI, logout clearing session + navigating, mobile menu toggle
+4. **router guard** — protected-route redirects (`/my-products`, `/products/add`, `/categories/add`, `/products/:id/edit`) carry a `redirect` query; public routes stay open; session restored exactly once

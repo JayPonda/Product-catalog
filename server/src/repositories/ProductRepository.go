@@ -195,7 +195,7 @@ func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUp
 		return preUpdateProduct, err
 	}
 
-	product, err := ProductRepositoryPtr.GetProductById(id)
+	product, err := ProductRepositoryPtr.GetProductById(id, exec...)
 	return product, err
 }
 

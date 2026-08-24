@@ -16,37 +16,14 @@
         </div>
 
         <!-- table showing the results -->
-        <div class="overflow-x-auto rounded-lg border border-gray-200">
+        <BaseTable
+            v-if="categories && Object.keys(categories).length >= 0"
+            :columns="columns"
+            :items="categories.categories || []"
+        />
 
-
-            <table class="min-w-full divide-y divide-gray-200 text-left text-sm"
-                v-if="Object.keys(categories).length >= 0">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 font-semibold text-gray-700" v-for="categorieTitle in scalarCategoryTitles"
-                            :key="categorieTitle">{{ categorieTitle.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white">
-                    <tr class="hover:bg-gray-50" v-for="(categoryData, index) in categories.categories"
-                        :key="categoryData.id">
-                        <td class="px-4 py-3" v-for="categorieTitle in scalarCategoryTitles" :key="categorieTitle"> {{
-                            categoryData[categorieTitle] }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- pagination component -->
+<!-- pagination component -->
         <nav class="flex items-center justify-end gap-2" aria-label="Pagination">
-            <div v-if="error" role="alert"
-                class="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <span>{{ error }}</span>
-                <button @click="error = ''" aria-label="Dismiss"
-                    class="ml-4 rounded p-1 leading-none text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 focus:outline-none">
-                    &#10005;
-                </button>
-            </div>
             <button @click="previous"
                 class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium leading-5 text-gray-700 shadow-xs transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                 Previous
@@ -65,11 +42,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getCategories, createCategory } from '@/network/request.js'
 import { useAuthStore } from '@/stores/auth'
+import { useErrorStore } from '@/stores/errors'
+import BaseTable from '@/components/table/BaseTable.vue'
 
 const auth = useAuthStore()
+const error = useErrorStore()
 
 const curruntPage = ref(0) // offset
 const curruntLimit = 20
@@ -78,14 +58,19 @@ const categoryTableTitle = ref([])
 const scalarCategoryTitles = computed(() =>
   categoryTableTitle.value.filter((t) => t !== 'deleted_at'),
 )
-const error = ref('')
+const columns = computed(() =>
+  scalarCategoryTitles.value.map((title) => ({
+    key: title,
+    label: title.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
+  })),
+)
 const newCategory = ref('')
 const addingCategory = ref(false)
 
 async function addCategory() {
     const name = newCategory.value.trim()
     if (!name) {
-        error.value = 'Category name is required.'
+        error.show('Category name is required.')
         return
     }
     addingCategory.value = true
@@ -95,7 +80,7 @@ async function addCategory() {
         newCategory.value = ''
         await fetchCategories()
     }
-    error.value = response.error
+    error.show(String(response.error ?? ''))
 }
 
 async function fetchCategories() {
@@ -111,19 +96,19 @@ async function fetchCategories() {
 
         categories.value = response.data
     }
-    error.value = response.error
+    error.show(String(response.error ?? ''))
 }
 
 function next() {
     if (!categories.value) {
-        error.value = 'Something went wrong';
+        error.show('Something went wrong');
         return
     }
-    if ((curruntPage.value + 1) * curruntLimit < categories.value.total) {
+    if (categories.value.total !== undefined && (curruntPage.value + 1) * curruntLimit < categories.value.total) {
         curruntPage.value = curruntPage.value + 1
         fetchCategories()
     } else {
-        error.value = 'No records on next page.'
+        error.show('No records on next page.')
     }
 }
 
@@ -131,14 +116,14 @@ function next() {
 function previous() {
 
     if (!categories.value) {
-        error.value = 'Something went wrong';
+        error.show('Something went wrong');
         return
     }
     if (curruntPage.value > 0) {
         curruntPage.value = curruntPage.value - 1
         fetchCategories()
     } else {
-        error.value = 'No records on previous page.'
+        error.show('No records on previous page.')
     }
 }
 

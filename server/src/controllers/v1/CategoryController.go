@@ -1,8 +1,6 @@
 package controllersv1
-
 import (
 	"errors"
-	"fmt"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/services"
@@ -62,9 +60,7 @@ func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println(categories, err)
-
-	return ctx.JSON(v1.MatchCategoriesResponse{Categories: categories})
+	return ctx.Status(fiber.StatusOK).JSON(v1.MatchCategoriesResponse{Categories: categories})
 }
 
 // ListCategories godoc
