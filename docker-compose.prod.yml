@@ -1,0 +1,164 @@
+# Production-style deployment for a single Docker host (or as a reference
+# for translating to a platform like ECS/Fly/Render).
+#
+# Secrets come from an environment file next to this compose file:
+#   cp deploy/.env.production.example deploy/.env.production
+#   # then fill in real values; NEVER commit the filled-in file.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file deploy/.env.production up -d
+#
+# The `migrate` one-shot job always runs first; `api` only starts once it
+# has exited successfully, so containers never serve against a stale schema.
+
+name: product-catalog
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database — use a MANAGED Postgres in real production. This service is kept
+  # for self-hosted single-node deployments and is not exposed publicly.
+  #
+  # Network isolation: postgres sits ONLY on the backend network. The web
+  # container can never reach it, so a compromised frontend cannot touch data.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16.15-alpine3.24
+    restart: unless-stopped
+    networks:
+      - backend
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------------------------
+  # One-shot schema migration. Exits non-zero on failure, which blocks api.
+  # ---------------------------------------------------------------------------
+  migrate:
+    build:
+      context: ./server
+    command: ["migrate", "up"]
+    networks:
+      - backend
+    environment:
+      APP_ENV: prod
+      # Required by the shared EnvConfig even though migrations don't use it.
+      JWT_SECRET: ${JWT_SECRET}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------------------------
+  # API server.
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./server
+    restart: unless-stopped
+    networks:
+      - frontend
+      - backend
+    environment:
+      APP_ENV: prod
+      HOST: 0.0.0.0
+      PORT: 3300
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      JWT_SECRET: ${JWT_SECRET}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-168h}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-25}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-10}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3300"          # internal only; web/proxy is the public entrypoint
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3300/readyz"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------------------------
+  # Frontend SPA behind nginx. Public entrypoint.
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./app
+      args:
+        # Empty = same-origin (nginx proxies /api to the api service).
+        # Or set a full URL like https://api.yourdomain.com for cross-origin.
+        VITE_BACKEND_URL: ${PUBLIC_API_URL:-}
+    restart: unless-stopped
+    networks:
+      - frontend
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    cap_drop:
+      - ALL
+    # Minimal caps the official nginx image needs to start its master
+    # process (chown temp dirs, drop privileges to the nginx user).
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /run:size=8m
+    security_opt:
+      - no-new-privileges:true
+
+# Only the web container publishes ports. Everything else is reachable
+# exclusively by the containers that share its network.
+networks:
+  frontend:
+  backend:
+    internal: true   # no outbound internet access from the DB network
+
+volumes:
+  postgres_data:

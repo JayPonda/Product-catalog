@@ -9,7 +9,9 @@ const DEFAULT_OPTS = {
 const V1 = '/api/v1'
 
 function buildUrl(path, params) {
-  const finalUrl = new URL(import.meta.env.VITE_BACKEND_URL + V1 + path)
+  // VITE_BACKEND_URL may be empty for same-origin deployments (nginx proxies
+  // /api to the backend); relative URLs resolve against the current origin.
+  const finalUrl = new URL(import.meta.env.VITE_BACKEND_URL + V1 + path, window.location.origin)
   finalUrl.search = new URLSearchParams(params).toString()
   return finalUrl.toString()
 }

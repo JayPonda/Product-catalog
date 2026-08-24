@@ -28,6 +28,17 @@ e.register({
   pluginName: 'tag-validator'
 });
 
+// 1b. Env Sync Check (.env <-> .env.example keys).
+// Runs on every push with no file matching and no dependencies:
+// .env files are gitignored, so they never show up in changed-file
+// lists, and this must still surface even if other checks fail.
+e.register({
+  name: 'Env Sync Check',
+  dir: '',
+  pattern: '',
+  pluginName: 'sync-envs'
+});
+
 // 2. Go Formatting Check
 e.register({
   name: 'Go Formatting Check',

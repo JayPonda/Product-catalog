@@ -356,11 +356,12 @@ All available hook plugins:
 | `go-coverage.js` | Runs the full backend test suite with `-coverpkg` and fails below **90%** statement coverage | pre-push |
 | `vitest-coverage.js` | Runs Vitest with V8 coverage and fails below **90%** statement threshold | pre-push |
 | `tag-validator.js` | Validates pushed tags: must be `vX.Y.Z` semver, point to a commit on `main`, be strictly greater than the highest existing tag, and not duplicate a tag on a different commit | pre-push |
+| `sync-envs.js` | Runs on every push regardless of changed files: scans the repo for `.env` files and requires each to sit beside a `.env.example` with an identical key set (values are unrestricted; drift is caught in both directions — keys only in `.env` *and* keys only in the example). An example without a local `.env` (fresh clone) is skipped. It cannot rely on file matching because gitignored `.env` files never appear in changed-file lists | pre-push |
 | `commit-msg-format.js` | Enforces Conventional Commits (`feat\|fix\|chore\|docs\|style\|refactor\|perf\|test(scope)?: message`); skips Merge/Revert/squash!/fixup! messages | commit-msg |
 | `go-test.js` | Plain `go test ./...` without coverage — kept as an alternative to `go-coverage` | available (not registered) |
 | `vitest.js` | Plain Vitest run without coverage — kept as an alternative to `vitest-coverage` | available (not registered) |
 
-Plugins are small single-purpose modules (`no-direct-main`, `branch-name`, `gofmt`, `golangci-lint`, `go-coverage`, `prettier`, `eslint-oxlint`, `vitest-coverage`, `tag-validator`, `commit-msg-format`). Adding a new check means dropping a plugin file in `plugins/` and registering it in the relevant hook file — no changes to the engine needed. Bypass anything with `git commit --no-verify` when required.
+Plugins are small single-purpose modules (`no-direct-main`, `branch-name`, `gofmt`, `golangci-lint`, `go-coverage`, `prettier`, `eslint-oxlint`, `vitest-coverage`, `tag-validator`, `sync-envs`, `commit-msg-format`). Adding a new check means dropping a plugin file in `plugins/` and registering it in the relevant hook file — no changes to the engine needed. Bypass anything with `git commit --no-verify` when required.
 
 #### ii. Command quick reference
 
@@ -408,9 +409,56 @@ Frontend — run from **`app/`** (no makefile; pnpm scripts):
 
 ## 3. Production setup
 
-> **TODO:** production setup is not finalized yet. This section will document:
-> - a. config envs — `APP_ENV=prod` (enables cookie `Secure` flag), `ALLOWED_ORIGINS` for the deployed frontend origin, DB pool sizing, and secret management for `JWT_SECRET` / `DB_*`
-> - b. docker setup — application image, running migrations per deployment (`go run . migrate up` or the binary equivalent), and the reverse-proxy/CORS story
+The app ships as two container images (API + SPA behind nginx) orchestrated by `docker-compose.prod.yml`. Migrations run as a one-shot job before the API starts, and the database is never reachable from the frontend container.
+
+### a. Config envs
+
+All runtime configuration is injected as environment variables — no `.env` file is baked into any image (`godotenv` simply falls through to system env when `.env` is absent).
+
+Secrets live in an env file next to the compose file, created from the template:
+
+```
+$ root > cp deploy/.env.production.example deploy/.env.production   # fill in real values; NEVER commit it
+$ root > docker compose -f docker-compose.prod.yml --env-file deploy/.env.production up -d --build
+```
+
+Production-specific behaviour worth knowing:
+
+| Variable / setting | Production notes |
+|---|---|
+| `APP_ENV=prod` | enables cookie `Secure` flag (auth requires HTTPS) and **disables Swagger** `/docs/*` |
+| `ALLOWED_ORIGINS` | exact deployed frontend origin(s), comma separated, no trailing slash |
+| `JWT_SECRET` | long random string — generate with `openssl rand -base64 48`; rotating it revokes every session |
+| `DB_SSLMODE` | `require` minimum, `verify-full` when a CA bundle is available |
+| `PUBLIC_API_URL` | leave **empty** for same-origin deployments (nginx proxies `/api`); set a full URL only for cross-origin hosting |
+| `HTTP_PORT` | host port published for the web container (only public port of the whole stack) |
+
+### b. Docker setup
+
+**Images**
+
+| Image | Build | Runtime |
+|---|---|---|
+| API (`server/Dockerfile`) | multi-stage: Go 1.26 build with vendored deps, `-trimpath -ldflags="-s -w"`, CGO off | alpine, non-root user, `ca-certificates` for TLS DBs; `migrations/` copied in (sql-migrate reads them relative to the workdir). Entrypoint runs `server` by default, `migrate up` via command override |
+| Web (`app/Dockerfile`) | multi-stage: node 22 + pnpm `--frozen-lockfile`, `VITE_BACKEND_URL` injected as build arg | nginx alpine serving `dist/`; config in `app/docker/nginx.conf` |
+
+**nginx responsibilities** (`app/docker/nginx.conf`):
+- SPA fallback — deep links like `/products/123` resolve to `index.html` on hard refresh instead of 404ing
+- same-origin reverse proxy — `/api/*` → `api:3300`, so there is no CORS surface and auth cookies stay first-party
+- security headers (`nosniff`, `DENY`, referrer policy), gzip, immutable caching of hashed assets while `index.html` is never cached
+
+**Orchestration flow** (`docker-compose.prod.yml`):
+
+1. `postgres` becomes healthy (self-hosted option; use managed Postgres in real production)
+2. `migrate` one-shot job applies pending migrations — if it exits non-zero, nothing else starts
+3. `api` starts only after migrate completes successfully; turns healthy once `GET /readyz` (DB ping) passes
+4. `web` starts only after api is healthy and publishes the single public port
+
+**Health & shutdown:** the API exposes `GET /health` (liveness — process up) and `GET /readyz` (readiness — dependencies reachable), so platforms can route traffic correctly without killing healthy-but-slow containers. SIGTERM triggers a graceful drain of in-flight requests (25 s budget) before exit.
+
+**Security hardening applied:** non-root containers, read-only root filesystems with tmpfs scratch space, `cap_drop: ALL` (web adds back only the five capabilities nginx needs), `no-new-privileges`, secrets passed at runtime only (`.dockerignore` keeps every `.env*` out of build contexts), pinned image versions, and network segmentation — `frontend` (web ↔ api) vs `backend` (`internal: true`, api/migrate/postgres, no internet egress). A compromised web container cannot resolve, let alone reach, the database.
+
+**Rollback:** images are rebuilt from source each deploy; redeploy the previous git commit to roll back. Migrations are forward-only by design — write schema changes to be backward-compatible for one release (expand → deploy → contract).
 
 
 ## 4. Scope description
