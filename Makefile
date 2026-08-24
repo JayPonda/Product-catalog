@@ -43,6 +43,8 @@ setup-hooks:
 	@echo 'node scripts/githooks/pre-commit.js "$$@"' >> .githooks/pre-commit
 	@echo '#!/bin/bash' > .githooks/pre-push
 	@echo 'node scripts/githooks/pre-push.js "$$@"' >> .githooks/pre-push
+	@echo '#!/bin/bash' > .githooks/commit-msg
+	@echo 'node scripts/githooks/commit-msg.js "$$@"' >> .githooks/commit-msg
 	git config core.hooksPath .githooks
-	chmod +x .githooks/pre-commit .githooks/pre-push
+	chmod +x .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
 	@echo "✅ Native git hooks configured successfully!"

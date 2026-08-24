@@ -1,3 +1,5 @@
 vendor
 .env
 tmp
+cover.out
+cover.html
