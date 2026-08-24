@@ -4,9 +4,13 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	// third party library
 	swagger "github.com/gofiber/contrib/v3/swaggo"
@@ -110,17 +114,40 @@ var serverCmd = &cobra.Command{
 		// Register routes
 		routes.RegisterV1Routes(app, productController, categoryController, authController, cfg.GetJWTSecret())
 
-		// Swagger docs
-		docs.SwaggerInfo.BasePath = "/api/v1"
-		app.Get("/docs/*", swagger.HandlerDefault)
+		// Swagger docs (disabled in production to avoid leaking the API surface)
+		if cfg.GetAppEnv() != "prod" {
+			docs.SwaggerInfo.BasePath = "/api/v1"
+			app.Get("/docs/*", swagger.HandlerDefault)
+		}
 
-		// Health check
+		// Liveness: process is up. No dependency checks here so the platform
+		// never restarts a healthy container because of a slow database.
 		app.Get("/health", func(c fiber.Ctx) error {
 			return c.Status(fiber.StatusOK).SendString("OK")
 		})
 
+		// Readiness: dependencies reachable. Traffic is only routed once this passes.
+		app.Get("/readyz", func(c fiber.Ctx) error {
+			ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+			defer cancel()
+
+			var one int
+			if err := orm.QueryRowContext(ctx, "SELECT 1").Scan(&one); err != nil {
+				return c.Status(fiber.StatusServiceUnavailable).SendString("not ready")
+			}
+			return c.Status(fiber.StatusOK).SendString("ready")
+		})
+
+		// Graceful shutdown: on SIGTERM/SIGINT stop accepting new connections,
+		// let in-flight requests drain within the timeout, then exit cleanly.
+		shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+
 		// Boot up application listener bindings dynamically using structural values
-		return app.Listen(fmt.Sprintf("%s:%s", cfg.GetHost(), cfg.GetPort()))
+		return app.Listen(fmt.Sprintf("%s:%s", cfg.GetHost(), cfg.GetPort()), fiber.ListenConfig{
+			GracefulContext: shutdownCtx,
+			ShutdownTimeout: 25 * time.Second,
+		})
 	},
 }
 

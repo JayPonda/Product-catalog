@@ -1,0 +1,19 @@
+# Secrets — never enter the image
+.env
+.env.*
+!.env.example
+
+# Local dev / artifacts
+tmp/
+testdb/
+Example-Queries.sql
+test_coverage_report.md
+makefile
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+
+# Git
+.git
+.gitignore
