@@ -1,12 +1,13 @@
 name: CI (PR)
 
-# Runs on PRs into main that target non-main branches. The checks only run once
-# the PR is marked "ready for review" — on label add and on every later push
-# while the label is present. Branches without that label are treated as
-# temporary and are skipped.
+# Runs on PRs into main. Triggers on:
+# - PR opened/reopened (initial creation)
+# - New commits pushed (synchronize)
+# - Label added/removed (labeled/unlabeled)
+# - Draft PR marked ready for review (ready_for_review)
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
     branches: [main]
 
 concurrency:
@@ -17,9 +18,11 @@ permissions:
   pull-requests: read
 
 env:
+  # Run CI only if PR has 'ready for review' label AND is not a draft
   RUN_CI: >-
     ${{
       github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft &&
       contains(github.event.pull_request.labels.*.name, 'ready for review')
     }}
   GO_VERSION: "1.26"
@@ -132,7 +135,12 @@ jobs:
       - name: Enforce frontend coverage ≥ 90%
         working-directory: app
         run: |
-          COV=$(node -e "process.stdout.write(String(require('./coverage/coverage-summary.json').total.statements.pct))")
+          # Check if coverage file exists
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "Coverage file not found. Tests might have failed."
+            exit 1
+          fi
+          COV=$(node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('./coverage/coverage-summary.json', 'utf8')); console.log(data.total.statements.pct);")
           echo "Frontend total coverage: ${COV}%"
           awk -v c="$COV" 'BEGIN{exit (c+0 >= 90 ? 0 : 1)}' || {
             echo "Frontend coverage is below the required 90% threshold"; exit 1;
