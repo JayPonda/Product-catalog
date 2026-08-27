@@ -49,7 +49,7 @@ func seedProductWithCategory(
 ) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 
-	created, err := svc.CreateProduct(v1.RequestProduct{
+	created, err := svc.CreateProduct(nil, v1.RequestProduct{
 		Name:          "Widget",
 		Description:   "a widget",
 		Price:         1999,
@@ -59,7 +59,7 @@ func seedProductWithCategory(
 		t.Fatal(err)
 	}
 
-	cat, err := categoryRepo.CreateCategory(models.Category{Name: "tools"})
+	cat, err := categoryRepo.CreateCategory(nil, models.Category{Name: "tools"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestProductService_Create_HappyPath_E2E(t *testing.T) {
 
 	productID, _ := seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	got, err := svc.GetProductById(productID)
+	got, err := svc.GetProductById(nil, productID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestProductService_Create_DuplicateName_E2E(t *testing.T) {
 	seedProductWithCategory(t, svc, categoryRepo, userID)
 
 	dup := v1.RequestProduct{Name: "Widget", Price: 999, StockQuantity: 1}
-	if _, err := svc.CreateProduct(dup, uuid.New()); !errors.Is(err, services.ErrDuplicateProductName) {
+	if _, err := svc.CreateProduct(nil, dup, uuid.New()); !errors.Is(err, services.ErrDuplicateProductName) {
 		t.Errorf("expected ErrDuplicateProductName, got %v", err)
 	}
 }
@@ -100,11 +100,11 @@ func TestProductService_GetProductById_WithCategories_E2E(t *testing.T) {
 	userID := uuid.New()
 	productID, catID := seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	if _, err := svc.LinkCategory(productID, catID); err != nil {
+	if _, err := svc.LinkCategory(nil, productID, catID); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := svc.GetProductById(productID)
+	got, err := svc.GetProductById(nil, productID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,16 +118,16 @@ func TestProductService_ListProducts_HydratesCategories_E2E(t *testing.T) {
 	userID := uuid.New()
 	productID, catID := seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	if _, err := svc.LinkCategory(productID, catID); err != nil {
+	if _, err := svc.LinkCategory(nil, productID, catID); err != nil {
 		t.Fatal(err)
 	}
 	// Second product owns no categories.
-	second, err := svc.CreateProduct(v1.RequestProduct{Name: "Gizmo", Price: 1, StockQuantity: 2}, userID)
+	second, err := svc.CreateProduct(nil, v1.RequestProduct{Name: "Gizmo", Price: 1, StockQuantity: 2}, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := svc.ListProducts(10, 0)
+	resp, err := svc.ListProducts(nil, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestProductService_UpdateProduct_Rename_E2E(t *testing.T) {
 	svc, categoryRepo := newProductService(t)
 	productID, _ := seedProductWithCategory(t, svc, categoryRepo, uuid.New())
 
-	updated, err := svc.UpdateProduct(productID, v1.RequestProduct{
+	updated, err := svc.UpdateProduct(nil, productID, v1.RequestProduct{
 		Name: "Widget Pro", Description: "bigger", Price: 2999, StockQuantity: 7,
 	})
 	if err != nil {
@@ -167,7 +167,7 @@ func TestProductService_UpdateProduct_KeepOwnName_E2E(t *testing.T) {
 	productID, _ := seedProductWithCategory(t, svc, categoryRepo, uuid.New())
 
 	// Keeping the same name must NOT count as a duplicate.
-	updated, err := svc.UpdateProduct(productID, v1.RequestProduct{
+	updated, err := svc.UpdateProduct(nil, productID, v1.RequestProduct{
 		Name: "Widget", Price: 21.00, StockQuantity: 3,
 	})
 	if err != nil {
@@ -183,12 +183,12 @@ func TestProductService_UpdateProduct_NameCollision_E2E(t *testing.T) {
 	userID := uuid.New()
 	seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	other, err := svc.CreateProduct(v1.RequestProduct{Name: "Taken", Price: 2, StockQuantity: 1}, userID)
+	other, err := svc.CreateProduct(nil, v1.RequestProduct{Name: "Taken", Price: 2, StockQuantity: 1}, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = svc.UpdateProduct(other.Product.ID, v1.RequestProduct{
+	_, err = svc.UpdateProduct(nil, other.Product.ID, v1.RequestProduct{
 		Name: "Widget", Price: 3, StockQuantity: 1,
 	})
 	if !errors.Is(err, services.ErrDuplicateProductName) {
@@ -200,16 +200,16 @@ func TestProductService_LinkUnlink_Errors_E2E(t *testing.T) {
 	svc, categoryRepo := newProductService(t)
 	productID, catID := seedProductWithCategory(t, svc, categoryRepo, uuid.New())
 
-	if _, err := svc.LinkCategory(uuid.New(), catID); !errors.Is(err, services.ErrProductNotFound) {
+	if _, err := svc.LinkCategory(nil, uuid.New(), catID); !errors.Is(err, services.ErrProductNotFound) {
 		t.Errorf("link unknown product: expected ErrProductNotFound, got %v", err)
 	}
-	if _, err := svc.LinkCategory(productID, uuid.New()); !errors.Is(err, services.ErrCategoryNotFound) {
+	if _, err := svc.LinkCategory(nil, productID, uuid.New()); !errors.Is(err, services.ErrCategoryNotFound) {
 		t.Errorf("link unknown category: expected ErrCategoryNotFound, got %v", err)
 	}
-	if _, err := svc.UnlinkCategory(uuid.New(), catID); !errors.Is(err, services.ErrProductNotFound) {
+	if _, err := svc.UnlinkCategory(nil, uuid.New(), catID); !errors.Is(err, services.ErrProductNotFound) {
 		t.Errorf("unlink unknown product: expected ErrProductNotFound, got %v", err)
 	}
-	if _, err := svc.UnlinkCategory(productID, uuid.New()); !errors.Is(err, services.ErrCategoryNotFound) {
+	if _, err := svc.UnlinkCategory(nil, productID, uuid.New()); !errors.Is(err, services.ErrCategoryNotFound) {
 		t.Errorf("unlink unknown category: expected ErrCategoryNotFound, got %v", err)
 	}
 }
@@ -219,10 +219,10 @@ func TestProductService_Unlink_RemovesFromResponse_E2E(t *testing.T) {
 	userID := uuid.New()
 	productID, catID := seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	if _, err := svc.LinkCategory(productID, catID); err != nil {
+	if _, err := svc.LinkCategory(nil, productID, catID); err != nil {
 		t.Fatal(err)
 	}
-	got, err := svc.UnlinkCategory(productID, catID)
+	got, err := svc.UnlinkCategory(nil, productID, catID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,19 +236,19 @@ func TestProductService_Delete_CascadesLinks_E2E(t *testing.T) {
 	userID := uuid.New()
 	productID, catID := seedProductWithCategory(t, svc, categoryRepo, userID)
 
-	if _, err := svc.LinkCategory(productID, catID); err != nil {
+	if _, err := svc.LinkCategory(nil, productID, catID); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DeleteProduct(productID); err != nil {
+	if err := svc.DeleteProduct(nil, productID); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.GetProductById(productID); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := svc.GetProductById(nil, productID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected ErrNoRows after delete, got %v", err)
 	}
 
 	// Link row must be tombstoned, not left active.
-	link, found, err := svc.ProductCategoryManager.GetProductCategory(productID, catID)
+	link, found, err := svc.ProductCategoryManager.GetProductCategory(nil, productID, catID)
 	if err != nil || !found {
 		t.Fatalf("link row missing entirely: found=%v err=%v", found, err)
 	}
@@ -263,11 +263,11 @@ func TestProductService_ListMyProducts_Isolated_E2E(t *testing.T) {
 	seedProductWithCategory(t, svc, categoryRepo, userID)
 
 	otherUser := uuid.New()
-	if _, err := svc.CreateProduct(v1.RequestProduct{Name: "Theirs", Price: 1, StockQuantity: 1}, otherUser); err != nil {
+	if _, err := svc.CreateProduct(nil, v1.RequestProduct{Name: "Theirs", Price: 1, StockQuantity: 1}, otherUser); err != nil {
 		t.Fatal(err)
 	}
 
-	mine, err := svc.ListMyProducts(userID, 10, 0)
+	mine, err := svc.ListMyProducts(nil, userID, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

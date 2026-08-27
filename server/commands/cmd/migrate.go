@@ -199,9 +199,10 @@ func openDB() (*sql.DB, error) {
 // a `force`: on error it prints the reason and stops, leaving the database in
 // the last known-good state.
 func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
+	ctx := utils.NewCLIContext()
 	db, err := openDB()
 	if err != nil {
-		appLogger.Error("migrate.go", "runMigrations", "failed to open database", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runMigrations", "failed to open database", nil, err.Error())
 		return err
 	}
 	defer db.Close()
@@ -216,11 +217,11 @@ func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
 		applied, err = migrate.Exec(db, appConfig.GetDialect(), source, direction)
 	}
 	if err != nil {
-		appLogger.Error("migrate.go", "runMigrations", "migration failed", utils.LoggerMeta{"direction": fmt.Sprintf("%v", direction)}, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runMigrations", "migration failed", utils.LoggerMeta{"direction": fmt.Sprintf("%v", direction)}, err.Error())
 		return fmt.Errorf("migration %v failed: %w", direction, err)
 	}
 
-	appLogger.Info("migrate.go", "runMigrations", "migrations completed", utils.LoggerMeta{"applied": applied, "direction": fmt.Sprintf("%v", direction)})
+	appLogger.Info(ctx, "migrate.go", "runMigrations", "migrations completed", utils.LoggerMeta{"applied": applied, "direction": fmt.Sprintf("%v", direction)})
 	return nil
 }
 
@@ -232,9 +233,10 @@ func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
 // that range using sql-migrate's own API. On a fresh database (no previous
 // table) it does nothing — use `migrate up`.
 func runSeed() error {
+	ctx := utils.NewCLIContext()
 	db, err := openDB()
 	if err != nil {
-		appLogger.Error("migrate.go", "runSeed", "failed to open database", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runSeed", "failed to open database", nil, err.Error())
 		return err
 	}
 	defer db.Close()
@@ -244,29 +246,29 @@ func runSeed() error {
 
 	_, dbMap, err := migrate.PlanMigration(db, dialect, source, migrate.Up, 0)
 	if err != nil {
-		appLogger.Error("migrate.go", "runSeed", "failed to initialize migration table", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runSeed", "failed to initialize migration table", nil, err.Error())
 		return fmt.Errorf("failed to initialize migration table: %w", err)
 	}
 
 	recordedLatest, err := recordedMaxVersion(db)
 	if err != nil {
-		appLogger.Error("migrate.go", "runSeed", "failed to read gorp_migrations", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runSeed", "failed to read gorp_migrations", nil, err.Error())
 		return err
 	}
 
 	previousLatest, err := previousLatestVersion(db)
 	if err != nil {
-		appLogger.Error("migrate.go", "runSeed", "failed to read previous migrations", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runSeed", "failed to read previous migrations", nil, err.Error())
 		return err
 	}
 	if previousLatest == 0 {
-		appLogger.Info("migrate.go", "runSeed", "no previous migrations found, nothing to seed", nil)
+		appLogger.Info(ctx, "migrate.go", "runSeed", "no previous migrations found, nothing to seed", nil)
 		return nil
 	}
 
 	ids, err := migrationFileIDs(migrationsDir)
 	if err != nil {
-		appLogger.Error("migrate.go", "runSeed", "failed to read migration files", nil, err.Error())
+		appLogger.Error(ctx, "migrate.go", "runSeed", "failed to read migration files", nil, err.Error())
 		return err
 	}
 
@@ -286,16 +288,16 @@ func runSeed() error {
 			if isDuplicateKey(err) {
 				continue
 			}
-			appLogger.Error("migrate.go", "runSeed", "failed to seed migration", utils.LoggerMeta{"id": id}, err.Error())
+			appLogger.Error(ctx, "migrate.go", "runSeed", "failed to seed migration", utils.LoggerMeta{"id": id}, err.Error())
 			return fmt.Errorf("failed to seed migration %s: %w", id, err)
 		}
 		seeded++
 	}
 
 	if seeded == 0 {
-		appLogger.Info("migrate.go", "runSeed", "gorp_migrations already up to date", nil)
+		appLogger.Info(ctx, "migrate.go", "runSeed", "gorp_migrations already up to date", nil)
 	} else {
-		appLogger.Info("migrate.go", "runSeed", "seed completed", utils.LoggerMeta{"seeded": seeded})
+		appLogger.Info(ctx, "migrate.go", "runSeed", "seed completed", utils.LoggerMeta{"seeded": seeded})
 	}
 	return nil
 }

@@ -44,12 +44,12 @@ func NewAuthController(service *services.AuthService, secureCookies bool, logger
 // @Failure      409     {object}  map[string]string
 // @Router       /auth/register [post]
 func (ac *AuthController) Register(ctx fiber.Ctx) error {
-	ac.Logger.Debug("AuthController.go", "Register", "request received", nil)
+	ac.Logger.Debug(ctx, "AuthController.go", "Register", "request received", nil)
 
 	var req v1.RegisterRequest
 
 	if err := ctx.Bind().JSON(&req); err != nil {
-		ac.Logger.Warn("AuthController.go", "Register", "invalid request body", utils.LoggerMeta{"error": err.Error()})
+		ac.Logger.Warn(ctx, "AuthController.go", "Register", "invalid request body", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid request body",
 			"details": err.Error(),
@@ -57,28 +57,28 @@ func (ac *AuthController) Register(ctx fiber.Ctx) error {
 	}
 
 	if err := ac.Validator.Struct(req); err != nil {
-		ac.Logger.Warn("AuthController.go", "Register", "validation failed", utils.LoggerMeta{"error": err.Error()})
+		ac.Logger.Warn(ctx, "AuthController.go", "Register", "validation failed", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "validation failed",
 			"details": err.Error(),
 		})
 	}
 
-	response, err := ac.Service.Register(req)
+	response, err := ac.Service.Register(ctx, req)
 	if err != nil {
 		if errors.Is(err, services.ErrDuplicateEmail) {
-			ac.Logger.Warn("AuthController.go", "Register", "duplicate email", utils.LoggerMeta{"email": req.Email})
+			ac.Logger.Warn(ctx, "AuthController.go", "Register", "duplicate email", utils.LoggerMeta{"email": req.Email})
 			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		ac.Logger.Error("AuthController.go", "Register", "service error", utils.LoggerMeta{"error": err.Error()}, "")
+		ac.Logger.Error(ctx, "AuthController.go", "Register", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	ac.Logger.Info("AuthController.go", "Register", "user registered", utils.LoggerMeta{"user_id": response.User.ID})
+	ac.Logger.Info(ctx, "AuthController.go", "Register", "user registered", utils.LoggerMeta{"user_id": response.User.ID})
 	return ctx.Status(fiber.StatusCreated).JSON(response)
 }
 
@@ -93,12 +93,12 @@ func (ac *AuthController) Register(ctx fiber.Ctx) error {
 // @Failure      401     {object}  map[string]string
 // @Router       /auth/login [post]
 func (ac *AuthController) Login(ctx fiber.Ctx) error {
-	ac.Logger.Debug("AuthController.go", "Login", "request received", nil)
+	ac.Logger.Debug(ctx, "AuthController.go", "Login", "request received", nil)
 
 	var req v1.LoginRequest
 
 	if err := ctx.Bind().JSON(&req); err != nil {
-		ac.Logger.Warn("AuthController.go", "Login", "invalid request body", utils.LoggerMeta{"error": err.Error()})
+		ac.Logger.Warn(ctx, "AuthController.go", "Login", "invalid request body", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid request body",
 			"details": err.Error(),
@@ -106,22 +106,22 @@ func (ac *AuthController) Login(ctx fiber.Ctx) error {
 	}
 
 	if err := ac.Validator.Struct(req); err != nil {
-		ac.Logger.Warn("AuthController.go", "Login", "validation failed", utils.LoggerMeta{"error": err.Error()})
+		ac.Logger.Warn(ctx, "AuthController.go", "Login", "validation failed", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "validation failed",
 			"details": err.Error(),
 		})
 	}
 
-	result, err := ac.Service.Login(req)
+	result, err := ac.Service.Login(ctx, req)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidCredentials) {
-			ac.Logger.Warn("AuthController.go", "Login", "invalid credentials", utils.LoggerMeta{"email": req.Email})
+			ac.Logger.Warn(ctx, "AuthController.go", "Login", "invalid credentials", utils.LoggerMeta{"email": req.Email})
 			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		ac.Logger.Error("AuthController.go", "Login", "service error", utils.LoggerMeta{"error": err.Error()}, "")
+		ac.Logger.Error(ctx, "AuthController.go", "Login", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -129,7 +129,7 @@ func (ac *AuthController) Login(ctx fiber.Ctx) error {
 
 	ac.setAuthCookies(ctx, result.AccessToken, result.RefreshToken)
 
-	ac.Logger.Info("AuthController.go", "Login", "login successful", utils.LoggerMeta{"user_id": result.User.ID.String()})
+	ac.Logger.Info(ctx, "AuthController.go", "Login", "login successful", utils.LoggerMeta{"user_id": result.User.ID.String()})
 	return ctx.Status(fiber.StatusOK).JSON(v1.AuthResponse{
 		User: v1.ToUserResponse(result.User),
 	})
@@ -143,24 +143,24 @@ func (ac *AuthController) Login(ctx fiber.Ctx) error {
 // @Failure      401 {object} map[string]string
 // @Router       /auth/logout [post]
 func (ac *AuthController) Logout(ctx fiber.Ctx) error {
-	ac.Logger.Debug("AuthController.go", "Logout", "request received", nil)
+	ac.Logger.Debug(ctx, "AuthController.go", "Logout", "request received", nil)
 
 	userID, ok := ctx.Locals(utils.UserContextKey).(uuid.UUID)
 	if !ok {
-		ac.Logger.Warn("AuthController.go", "Logout", "unauthenticated", nil)
+		ac.Logger.Warn(ctx, "AuthController.go", "Logout", "unauthenticated", nil)
 		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "unauthenticated",
 		})
 	}
 
-	if err := ac.Service.Logout(userID); err != nil {
-		ac.Logger.Error("AuthController.go", "Logout", "service error", utils.LoggerMeta{"error": err.Error(), "user_id": userID.String()}, "")
+	if err := ac.Service.Logout(ctx, userID); err != nil {
+		ac.Logger.Error(ctx, "AuthController.go", "Logout", "service error", utils.LoggerMeta{"error": err.Error(), "user_id": userID.String()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	ac.Logger.Info("AuthController.go", "Logout", "logout successful", utils.LoggerMeta{"user_id": userID.String()})
+	ac.Logger.Info(ctx, "AuthController.go", "Logout", "logout successful", utils.LoggerMeta{"user_id": userID.String()})
 	ac.clearAuthCookies(ctx)
 	return ctx.Status(fiber.StatusNoContent).Send(nil)
 }
@@ -173,25 +173,25 @@ func (ac *AuthController) Logout(ctx fiber.Ctx) error {
 // @Failure      401 {object} map[string]string
 // @Router       /auth/me [get]
 func (ac *AuthController) Me(ctx fiber.Ctx) error {
-	ac.Logger.Debug("AuthController.go", "Me", "request received", nil)
+	ac.Logger.Debug(ctx, "AuthController.go", "Me", "request received", nil)
 
 	userID, ok := ctx.Locals(utils.UserContextKey).(uuid.UUID)
 	if !ok {
-		ac.Logger.Warn("AuthController.go", "Me", "unauthenticated", nil)
+		ac.Logger.Warn(ctx, "AuthController.go", "Me", "unauthenticated", nil)
 		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "unauthenticated",
 		})
 	}
 
-	user, err := ac.Service.UserManager.GetUserById(userID)
+	user, err := ac.Service.UserManager.GetUserById(ctx, userID)
 	if err != nil {
-		ac.Logger.Warn("AuthController.go", "Me", "user not found", utils.LoggerMeta{"user_id": userID.String()})
+		ac.Logger.Warn(ctx, "AuthController.go", "Me", "user not found", utils.LoggerMeta{"user_id": userID.String()})
 		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "user not found",
 		})
 	}
 
-	ac.Logger.Debug("AuthController.go", "Me", "success", utils.LoggerMeta{"user_id": userID.String()})
+	ac.Logger.Debug(ctx, "AuthController.go", "Me", "success", utils.LoggerMeta{"user_id": userID.String()})
 	return ctx.JSON(v1.AuthResponse{
 		User: v1.ToUserResponse(user),
 	})

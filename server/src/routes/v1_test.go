@@ -75,6 +75,7 @@ func newTestApp(t *testing.T) *testApp {
 		controllersv1.NewCategoryController(categorySvc, logger),
 		controllersv1.NewAuthController(authSvc, false, logger),
 		testJWTSecret,
+		logger,
 	)
 
 	return &testApp{app: app, authService: authSvc, db: db}

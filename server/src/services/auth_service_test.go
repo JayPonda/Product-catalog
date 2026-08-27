@@ -42,7 +42,7 @@ func registerReq(email string) v1.RegisterRequest {
 func TestAuthService_Register_HappyPath_E2E(t *testing.T) {
 	svc := newAuthService(t)
 
-	resp, err := svc.Register(registerReq("jane@example.com"))
+	resp, err := svc.Register(nil, registerReq("jane@example.com"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestAuthService_Register_HappyPath_E2E(t *testing.T) {
 	}
 
 	// Persisted user must carry a bcrypt hash, never the raw password.
-	user, err := svc.UserManager.GetUserByEmail("jane@example.com")
+	user, err := svc.UserManager.GetUserByEmail(nil, "jane@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,10 +66,10 @@ func TestAuthService_Register_HappyPath_E2E(t *testing.T) {
 func TestAuthService_Register_DuplicateEmail_E2E(t *testing.T) {
 	svc := newAuthService(t)
 
-	if _, err := svc.Register(registerReq("dup@example.com")); err != nil {
+	if _, err := svc.Register(nil, registerReq("dup@example.com")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(registerReq("dup@example.com")); !errors.Is(err, services.ErrDuplicateEmail) {
+	if _, err := svc.Register(nil, registerReq("dup@example.com")); !errors.Is(err, services.ErrDuplicateEmail) {
 		t.Errorf("expected ErrDuplicateEmail, got %v", err)
 	}
 }
@@ -77,12 +77,12 @@ func TestAuthService_Register_DuplicateEmail_E2E(t *testing.T) {
 func TestAuthService_Login_Success_E2E(t *testing.T) {
 	svc := newAuthService(t)
 
-	reg, err := svc.Register(registerReq("login@example.com"))
+	reg, err := svc.Register(nil, registerReq("login@example.com"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := svc.Login(v1.LoginRequest{Email: "login@example.com", Password: "supersecret1"})
+	result, err := svc.Login(nil, v1.LoginRequest{Email: "login@example.com", Password: "supersecret1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestAuthService_Login_Success_E2E(t *testing.T) {
 	}
 
 	hash := utils.HashToken(result.RefreshToken)
-	stored, err := svc.UserManager.GetRefreshTokenByHash(hash)
+	stored, err := svc.UserManager.GetRefreshTokenByHash(nil, hash)
 	if err != nil {
 		t.Fatalf("refresh token not persisted: %v", err)
 	}
@@ -117,11 +117,11 @@ func TestAuthService_Login_Success_E2E(t *testing.T) {
 
 func TestAuthService_Login_WrongPassword_E2E(t *testing.T) {
 	svc := newAuthService(t)
-	if _, err := svc.Register(registerReq("pw@example.com")); err != nil {
+	if _, err := svc.Register(nil, registerReq("pw@example.com")); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := svc.Login(v1.LoginRequest{Email: "pw@example.com", Password: "wrongpassword"})
+	_, err := svc.Login(nil, v1.LoginRequest{Email: "pw@example.com", Password: "wrongpassword"})
 	if !errors.Is(err, services.ErrInvalidCredentials) {
 		t.Errorf("expected ErrInvalidCredentials, got %v", err)
 	}
@@ -130,7 +130,7 @@ func TestAuthService_Login_WrongPassword_E2E(t *testing.T) {
 func TestAuthService_Login_UnknownEmail_E2E(t *testing.T) {
 	svc := newAuthService(t)
 
-	_, err := svc.Login(v1.LoginRequest{Email: "ghost@example.com", Password: "whatever1"})
+	_, err := svc.Login(nil, v1.LoginRequest{Email: "ghost@example.com", Password: "whatever1"})
 	if !errors.Is(err, services.ErrInvalidCredentials) {
 		t.Errorf("expected ErrInvalidCredentials, got %v", err)
 	}
@@ -145,11 +145,11 @@ func TestAuthService_RefreshToken_ExpiredInvisible_E2E(t *testing.T) {
 		TokenHash: utils.HashToken("stale-raw-token"),
 		ExpiresAt: time.Now().Add(-time.Hour),
 	}
-	if err := repo.CreateRefreshToken(expiredToken); err != nil {
+	if err := repo.CreateRefreshToken(nil, expiredToken); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := repo.GetRefreshTokenByHash(expiredToken.TokenHash); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := repo.GetRefreshTokenByHash(nil, expiredToken.TokenHash); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expired token visible: %v", err)
 	}
 }
@@ -157,26 +157,26 @@ func TestAuthService_RefreshToken_ExpiredInvisible_E2E(t *testing.T) {
 func TestAuthService_Logout_RevokesAllTokens_E2E(t *testing.T) {
 	svc := newAuthService(t)
 
-	reg, err := svc.Register(registerReq("bye@example.com"))
+	reg, err := svc.Register(nil, registerReq("bye@example.com"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	login1, err := svc.Login(v1.LoginRequest{Email: "bye@example.com", Password: "supersecret1"})
+	login1, err := svc.Login(nil, v1.LoginRequest{Email: "bye@example.com", Password: "supersecret1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// A second session must also die on logout.
-	if _, err := svc.Login(v1.LoginRequest{Email: "bye@example.com", Password: "supersecret1"}); err != nil {
+	if _, err := svc.Login(nil, v1.LoginRequest{Email: "bye@example.com", Password: "supersecret1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := svc.Logout(mustParse(t, reg.User.ID)); err != nil {
+	if err := svc.Logout(nil, mustParse(t, reg.User.ID)); err != nil {
 		t.Fatal(err)
 	}
 
 	hash := utils.HashToken(login1.RefreshToken)
-	if _, err := svc.UserManager.GetRefreshTokenByHash(hash); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := svc.UserManager.GetRefreshTokenByHash(nil, hash); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("token survived logout: %v", err)
 	}
 }

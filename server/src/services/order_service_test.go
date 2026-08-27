@@ -42,7 +42,7 @@ func TestOrderService_ListOrdersInRange_E2E(t *testing.T) {
 	base := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	seedPair(t, svc, base)
 
-	resp, err := svc.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	resp, err := svc.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestOrderService_RemoveOrders_E2E(t *testing.T) {
 	base := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	id1, id2 := seedPair(t, svc, base)
 
-	affected, err := svc.RemoveOrders([]uuid.UUID{mustParse(t, id1), mustParse(t, id2)})
+	affected, err := svc.RemoveOrders(nil, []uuid.UUID{mustParse(t, id1), mustParse(t, id2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestOrderService_RemoveOrders_E2E(t *testing.T) {
 		t.Errorf("affected = %d, want 2", affected)
 	}
 
-	resp, err := svc.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	resp, err := svc.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestOrderService_RemoveOrders_E2E(t *testing.T) {
 
 func TestOrderService_RemoveOrders_Empty_E2E(t *testing.T) {
 	svc := newOrderService(t)
-	affected, err := svc.RemoveOrders(nil)
+	affected, err := svc.RemoveOrders(nil, nil)
 	if err != nil {
 		t.Fatalf("empty ids should not error: %v", err)
 	}
@@ -92,12 +92,12 @@ func TestOrderService_RemoveOrder_TransactionCommit_E2E(t *testing.T) {
 	base := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	id1, _ := seedPair(t, svc, base)
 
-	if err := svc.RemoveOrder(mustParse(t, id1)); err != nil {
+	if err := svc.RemoveOrder(nil, mustParse(t, id1)); err != nil {
 		t.Fatalf("RemoveOrder: %v", err)
 	}
 
 	// Committed transaction: exactly one order remains visible.
-	resp, err := svc.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	resp, err := svc.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestOrderService_ListOrders_E2E(t *testing.T) {
 	base := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	seedPair(t, svc, base)
 
-	resp, err := svc.ListOrders(20, 0)
+	resp, err := svc.ListOrders(nil, 20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,8 +140,8 @@ func TestOrderService_ListOrdersInRangeTx_E2E(t *testing.T) {
 	base := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	seedPair(t, svc, base)
 
-	err := svc.InTx(func(tx *goqu.TxDatabase) error {
-		resp, err := svc.ListOrdersInRangeTx(tx, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		resp, err := svc.ListOrdersInRangeTx(nil, tx, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 		if err != nil {
 			return err
 		}
@@ -157,8 +157,8 @@ func TestOrderService_ListOrdersInRangeTx_E2E(t *testing.T) {
 
 func TestOrderService_RemoveOrdersTx_Empty_E2E(t *testing.T) {
 	svc := newOrderService(t)
-	err := svc.InTx(func(tx *goqu.TxDatabase) error {
-		affected, err := svc.RemoveOrdersTx(tx, nil)
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		affected, err := svc.RemoveOrdersTx(nil, tx, nil)
 		if err != nil {
 			return err
 		}

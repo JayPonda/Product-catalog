@@ -3,10 +3,11 @@ package routes
 import (
 	controllersv1 "github.com/JayPonda/Product-catalog/server/src/controllers/v1"
 	"github.com/JayPonda/Product-catalog/server/src/middleware"
+	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterV1Routes(app *fiber.App, productController *controllersv1.ProductController, categoryController *controllersv1.CategoryController, authController *controllersv1.AuthController, authSecret string) {
+func RegisterV1Routes(app *fiber.App, productController *controllersv1.ProductController, categoryController *controllersv1.CategoryController, authController *controllersv1.AuthController, authSecret string, logger *utils.StructuredLogger) {
 	v1 := app.Group("/api/v1")
 
 	products := v1.Group("/products")
@@ -15,25 +16,25 @@ func RegisterV1Routes(app *fiber.App, productController *controllersv1.ProductCo
 	products.Get("/name/:name", productController.GetProductByName)
 
 	// Mutating routes require a valid access token.
-	products.Post("", middleware.RequireAuth(authSecret), productController.CreateProduct)
-	products.Put("/:id", middleware.RequireAuth(authSecret), productController.UpdateProduct)
-	products.Post("/:id/categories/link", middleware.RequireAuth(authSecret), productController.LinkCategory)
-	products.Post("/:id/categories/unlink", middleware.RequireAuth(authSecret), productController.UnlinkCategory)
-	products.Delete("/:id", middleware.RequireAuth(authSecret), productController.DeleteProduct)
+	products.Post("", middleware.RequireAuth(authSecret, logger), productController.CreateProduct)
+	products.Put("/:id", middleware.RequireAuth(authSecret, logger), productController.UpdateProduct)
+	products.Post("/:id/categories/link", middleware.RequireAuth(authSecret, logger), productController.LinkCategory)
+	products.Post("/:id/categories/unlink", middleware.RequireAuth(authSecret, logger), productController.UnlinkCategory)
+	products.Delete("/:id", middleware.RequireAuth(authSecret, logger), productController.DeleteProduct)
 
 	myProducts := v1.Group("/my-products")
-	myProducts.Get("", middleware.RequireAuth(authSecret), productController.ListMyProducts)
+	myProducts.Get("", middleware.RequireAuth(authSecret, logger), productController.ListMyProducts)
 
 	categories := v1.Group("/categories")
 	categories.Get("", categoryController.ListCategories)
 	categories.Get("/match", categoryController.MatchCategories)
 
 	// Mutating routes require a valid access token.
-	categories.Post("", middleware.RequireAuth(authSecret), categoryController.CreateCategory)
+	categories.Post("", middleware.RequireAuth(authSecret, logger), categoryController.CreateCategory)
 
 	auth := v1.Group("/auth")
 	auth.Post("/register", authController.Register)
 	auth.Post("/login", authController.Login)
-	auth.Get("/me", middleware.RequireAuth(authSecret), authController.Me)
-	auth.Post("/logout", middleware.RequireAuth(authSecret), authController.Logout)
+	auth.Get("/me", middleware.RequireAuth(authSecret, logger), authController.Me)
+	auth.Post("/logout", middleware.RequireAuth(authSecret, logger), authController.Logout)
 }

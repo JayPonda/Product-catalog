@@ -17,9 +17,9 @@ import (
 
 // DedupStore is the persistence surface the dedup job needs.
 type DedupStore interface {
-	InTx(fn func(tx *goqu.TxDatabase) error) error
-	ListOrdersInRangeTx(tx *goqu.TxDatabase, start time.Time, end time.Time, limit int, offset int) (v1.ListOrdersResponse, error)
-	RemoveOrdersTx(tx *goqu.TxDatabase, ids []uuid.UUID) (int64, error)
+	InTx(ctx utils.RequestContext, fn func(tx *goqu.TxDatabase) error) error
+	ListOrdersInRangeTx(ctx utils.RequestContext, tx *goqu.TxDatabase, start time.Time, end time.Time, limit int, offset int) (v1.ListOrdersResponse, error)
+	RemoveOrdersTx(ctx utils.RequestContext, tx *goqu.TxDatabase, ids []uuid.UUID) (int64, error)
 }
 
 // DedupConfig holds the options for the deduplication run.
@@ -33,13 +33,13 @@ type DedupConfig struct {
 }
 
 // RunDedupOrdersRemove runs the duplicate-order removal for the given time window.
-func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConfig, logger *utils.StructuredLogger) error {
+func RunDedupOrdersRemove(ctx utils.RequestContext, start, end time.Time, store DedupStore, dCfg DedupConfig, logger *utils.StructuredLogger) error {
 	mode := "scheduled"
 	if dCfg.Start != "" && dCfg.End != "" {
 		mode = "manual"
 	}
 
-	logger.Info("dedup_service.go", "RunDedupOrdersRemove", "dedup run starting", utils.LoggerMeta{
+	logger.Info(ctx, "dedup_service.go", "RunDedupOrdersRemove", "dedup run starting", utils.LoggerMeta{
 		"mode":    mode,
 		"start":   start.Format(time.RFC3339),
 		"end":     end.Format(time.RFC3339),
@@ -51,14 +51,14 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 
 	// Split the range into window-sized batches.
 	chunks := SplitRange(start, end, dCfg.Window, dCfg.Nearby)
-	logger.Debug("dedup_service.go", "RunDedupOrdersRemove", "range split into sub-windows", utils.LoggerMeta{
+	logger.Debug(ctx, "dedup_service.go", "RunDedupOrdersRemove", "range split into sub-windows", utils.LoggerMeta{
 		"chunks": len(chunks),
 	})
 
 	results := make([]dedupChunkResult, len(chunks))
 	if len(chunks) == 1 {
 		// Single batch: process sequentially (e.g. the normal scheduled 2.5h run).
-		results[0] = ProcessDedupChunk(chunks[0][0], chunks[0][1], store, dCfg, logger)
+		results[0] = ProcessDedupChunk(ctx, chunks[0][0], chunks[0][1], store, dCfg, logger)
 	} else {
 		// Multiple batches: process concurrently via a fixed worker pool, so the
 		// number of goroutines stays bounded (maxConcurrency) regardless of how
@@ -77,12 +77,12 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 				defer wg.Done()
 				for i := range jobs {
 					s, e := chunks[i][0], chunks[i][1]
-					logger.Debug("dedup_service.go", "RunDedupOrdersRemove", "processing sub-window", utils.LoggerMeta{
+					logger.Debug(ctx, "dedup_service.go", "RunDedupOrdersRemove", "processing sub-window", utils.LoggerMeta{
 						"index": i,
 						"start": s.Format(time.RFC3339),
 						"end":   e.Format(time.RFC3339),
 					})
-					results[i] = ProcessDedupChunk(s, e, store, dCfg, logger)
+					results[i] = ProcessDedupChunk(ctx, s, e, store, dCfg, logger)
 				}
 			}()
 		}
@@ -110,7 +110,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 	totalWould := len(seen)
 
 	if dCfg.DryRun {
-		logger.Info("dedup_service.go", "RunDedupOrdersRemove", "no changes applied (dry-run)", utils.LoggerMeta{
+		logger.Info(ctx, "dedup_service.go", "RunDedupOrdersRemove", "no changes applied (dry-run)", utils.LoggerMeta{
 			"start":            start.Format(time.RFC3339),
 			"end":              end.Format(time.RFC3339),
 			"chunks":           len(chunks),
@@ -128,7 +128,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 		return errors.Join(errs...)
 	}
 
-	logger.Info("dedup_service.go", "RunDedupOrdersRemove", "dedup complete", utils.LoggerMeta{
+	logger.Info(ctx, "dedup_service.go", "RunDedupOrdersRemove", "dedup complete", utils.LoggerMeta{
 		"start":            start.Format(time.RFC3339),
 		"end":              end.Format(time.RFC3339),
 		"chunks":           len(chunks),
@@ -151,7 +151,7 @@ type dedupChunkResult struct {
 
 // ProcessDedupChunk fetches, clusters, and (unless dry-run) removes duplicates
 // for one sub-window.
-func ProcessDedupChunk(start, end time.Time, store DedupStore, dCfg DedupConfig, logger *utils.StructuredLogger) dedupChunkResult {
+func ProcessDedupChunk(ctx utils.RequestContext, start, end time.Time, store DedupStore, dCfg DedupConfig, logger *utils.StructuredLogger) dedupChunkResult {
 	type dupKey struct {
 		customer uuid.UUID
 		cents    int64
@@ -159,13 +159,13 @@ func ProcessDedupChunk(start, end time.Time, store DedupStore, dCfg DedupConfig,
 
 	var result dedupChunkResult
 
-	err := store.InTx(func(tx *goqu.TxDatabase) error {
+	err := store.InTx(ctx, func(tx *goqu.TxDatabase) error {
 		groups := make(map[dupKey][]models.Order)
 
 		offset := 0
 		scanned := 0
 		for {
-			resp, err := store.ListOrdersInRangeTx(tx, start, end, dCfg.Batch, offset)
+			resp, err := store.ListOrdersInRangeTx(ctx, tx, start, end, dCfg.Batch, offset)
 			if err != nil {
 				return err
 			}
@@ -207,11 +207,11 @@ func ProcessDedupChunk(start, end time.Time, store DedupStore, dCfg DedupConfig,
 		for _, id := range keptIDs {
 			kept = append(kept, fmt.Sprintf("%s@%s", id.String(), byID[id].Format(time.RFC3339)))
 		}
-		logger.Debug("dedup_service.go", "ProcessDedupChunk", "orders flagged redundant (earlier ones, would remove)", utils.LoggerMeta{
+		logger.Debug(ctx, "dedup_service.go", "ProcessDedupChunk", "orders flagged redundant (earlier ones, would remove)", utils.LoggerMeta{
 			"count":     len(redundant),
 			"order_ids": redundant,
 		})
-		logger.Debug("dedup_service.go", "ProcessDedupChunk", "orders kept (latest of each cluster)", utils.LoggerMeta{
+		logger.Debug(ctx, "dedup_service.go", "ProcessDedupChunk", "orders kept (latest of each cluster)", utils.LoggerMeta{
 			"count":     len(kept),
 			"order_ids": kept,
 		})
@@ -225,7 +225,7 @@ func ProcessDedupChunk(start, end time.Time, store DedupStore, dCfg DedupConfig,
 
 		removed := int64(0)
 		if len(toRemove) > 0 {
-			affected, err := store.RemoveOrdersTx(tx, toRemove)
+			affected, err := store.RemoveOrdersTx(ctx, tx, toRemove)
 			if err != nil {
 				return err
 			}

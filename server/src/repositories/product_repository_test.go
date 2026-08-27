@@ -37,7 +37,7 @@ func TestProductRepo_Create_AndFetch_E2E(t *testing.T) {
 
 	in := mkProduct("keyboard")
 	in.UserID = userID
-	created, err := repo.CreateProduct(in)
+	created, err := repo.CreateProduct(nil, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestProductRepo_Create_AndFetch_E2E(t *testing.T) {
 		t.Errorf("user_id not persisted: %+v", created.UserID)
 	}
 
-	got, err := repo.GetProductById(created.ID)
+	got, err := repo.GetProductById(nil, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestProductRepo_Create_AndFetch_E2E(t *testing.T) {
 func TestProductRepo_Create_AnonymousOwner_E2E(t *testing.T) {
 	repo := newProductRepo(t)
 
-	created, err := repo.CreateProduct(mkProduct("guest-item"))
+	created, err := repo.CreateProduct(nil, mkProduct("guest-item"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,20 +71,20 @@ func TestProductRepo_Create_AnonymousOwner_E2E(t *testing.T) {
 
 func TestProductRepo_GetByName_NotFound_E2E(t *testing.T) {
 	repo := newProductRepo(t)
-	if _, err := repo.GetProductByName("nope"); err != sql.ErrNoRows {
+	if _, err := repo.GetProductByName(nil, "nope"); err != sql.ErrNoRows {
 		t.Errorf("expected ErrNoRows, got %v", err)
 	}
 }
 
 func TestProductRepo_Update_E2E(t *testing.T) {
 	repo := newProductRepo(t)
-	created, err := repo.CreateProduct(mkProduct("old-name"))
+	created, err := repo.CreateProduct(nil, mkProduct("old-name"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	before := created.UpdatedAt
-	updated, err := repo.UpdateProduct(created.ID, models.Product{
+	updated, err := repo.UpdateProduct(nil, created.ID, models.Product{
 		Name:          "new-name",
 		Description:   "updated desc",
 		Price:         4242,
@@ -121,7 +121,7 @@ func TestProductRepo_GetProducts_PaginationAndDelete_E2E(t *testing.T) {
 	bID := mustUUID(t, b)
 	_ = aID
 
-	page, total, err := repo.GetProducts(2, 0)
+	page, total, err := repo.GetProducts(nil, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,13 +133,13 @@ func TestProductRepo_GetProducts_PaginationAndDelete_E2E(t *testing.T) {
 		t.Errorf("expected [gamma beta], got [%s %s]", page[0].Name, page[1].Name)
 	}
 
-	if err := repo.DeleteProduct(bID); err != nil {
+	if err := repo.DeleteProduct(nil, bID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.GetProductById(bID); err != sql.ErrNoRows {
+	if _, err := repo.GetProductById(nil, bID); err != sql.ErrNoRows {
 		t.Errorf("deleted product should be invisible, got %v", err)
 	}
-	_, total, _ = repo.GetProducts(10, 0)
+	_, total, _ = repo.GetProducts(nil, 10, 0)
 	if total != 2 {
 		t.Errorf("total after delete = %d, want 2", total)
 	}
@@ -158,12 +158,12 @@ func TestProductRepo_GetMyProducts_E2E(t *testing.T) {
 	p3.UserID = other
 
 	for _, p := range []models.Product{p1, p2, p3} {
-		if _, err := repo.CreateProduct(p); err != nil {
+		if _, err := repo.CreateProduct(nil, p); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	list, total, err := repo.GetMyProducts(mine.UUID, 10, 0)
+	list, total, err := repo.GetMyProducts(nil, mine.UUID, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

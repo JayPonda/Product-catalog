@@ -25,7 +25,7 @@ func InitProductRepository(db *goqu.Database, logger *utils.StructuredLogger) (*
 	}, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID, exec ...utils.Executor) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProductById(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) (models.Product, error) {
 	var product models.Product
 	l := ProductRepositoryPtr.Logger
 
@@ -51,19 +51,19 @@ func (ProductRepositoryPtr *ProductRepository) GetProductById(id uuid.UUID, exec
 		ScanStruct(&product)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetProductById", "failed to query product", utils.LoggerMeta{"id": id.String()}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProductById", "failed to query product", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return product, err
 	}
 
 	if !found {
-		l.Warn("ProductRepository.go", "GetProductById", "product not found", utils.LoggerMeta{"id": id.String()})
+		l.Warn(ctx, "ProductRepository.go", "GetProductById", "product not found", utils.LoggerMeta{"id": id.String()})
 		return product, sql.ErrNoRows
 	}
 
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string, exec ...utils.Executor) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProductByName(ctx utils.RequestContext, name string, exec ...utils.Executor) (models.Product, error) {
 	var product models.Product
 	l := ProductRepositoryPtr.Logger
 
@@ -89,19 +89,19 @@ func (ProductRepositoryPtr *ProductRepository) GetProductByName(name string, exe
 		ScanStruct(&product)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetProductByName", "failed to query product by name", utils.LoggerMeta{"name": name}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProductByName", "failed to query product by name", utils.LoggerMeta{"name": name}, err.Error())
 		return product, err
 	}
 
 	if !found {
-		l.Warn("ProductRepository.go", "GetProductByName", "product not found by name", utils.LoggerMeta{"name": name})
+		l.Warn(ctx, "ProductRepository.go", "GetProductByName", "product not found by name", utils.LoggerMeta{"name": name})
 		return product, sql.ErrNoRows
 	}
 
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProducts(limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+func (ProductRepositoryPtr *ProductRepository) GetProducts(ctx utils.RequestContext, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
 	l := ProductRepositoryPtr.Logger
 
@@ -129,7 +129,7 @@ func (ProductRepositoryPtr *ProductRepository) GetProducts(limit int, offset int
 		ScanStructs(&products)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetProducts", "failed to query products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to query products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
@@ -144,20 +144,20 @@ func (ProductRepositoryPtr *ProductRepository) GetProducts(limit int, offset int
 		ScanVal(&total)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetProducts", "failed to count products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to count products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
-	l.Debug("ProductRepository.go", "GetProducts", "products retrieved", utils.LoggerMeta{"limit": limit, "offset": offset, "count": len(products), "total": total})
+	l.Debug(ctx, "ProductRepository.go", "GetProducts", "products retrieved", utils.LoggerMeta{"limit": limit, "offset": offset, "count": len(products), "total": total})
 	return products, total, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Product, exec ...utils.Executor) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) CreateProduct(ctx utils.RequestContext, product models.Product, exec ...utils.Executor) (models.Product, error) {
 	l := ProductRepositoryPtr.Logger
 
 	uuid, err := utils.GetUUID()
 	if err != nil {
-		l.Error("ProductRepository.go", "CreateProduct", "failed to generate UUID", nil, err.Error())
+		l.Error(ctx, "ProductRepository.go", "CreateProduct", "failed to generate UUID", nil, err.Error())
 		return product, err
 	}
 
@@ -180,21 +180,21 @@ func (ProductRepositoryPtr *ProductRepository) CreateProduct(product models.Prod
 	).Executor().Exec()
 
 	if err != nil {
-		l.Error("ProductRepository.go", "CreateProduct", "failed to insert product", utils.LoggerMeta{"name": product.Name}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "CreateProduct", "failed to insert product", utils.LoggerMeta{"name": product.Name}, err.Error())
 		return product, err
 	}
 
-	product, err = ProductRepositoryPtr.GetProductById(uuid, exec...)
+	product, err = ProductRepositoryPtr.GetProductById(ctx, uuid, exec...)
 	if err != nil {
-		l.Error("ProductRepository.go", "CreateProduct", "failed to retrieve created product", utils.LoggerMeta{"id": uuid.String()}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "CreateProduct", "failed to retrieve created product", utils.LoggerMeta{"id": uuid.String()}, err.Error())
 		return product, err
 	}
 
-	l.Debug("ProductRepository.go", "CreateProduct", "product created", utils.LoggerMeta{"id": uuid.String(), "name": product.Name})
+	l.Debug(ctx, "ProductRepository.go", "CreateProduct", "product created", utils.LoggerMeta{"id": uuid.String(), "name": product.Name})
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUpdateProduct models.Product, exec ...utils.Executor) (models.Product, error) {
+func (ProductRepositoryPtr *ProductRepository) UpdateProduct(ctx utils.RequestContext, id uuid.UUID, preUpdateProduct models.Product, exec ...utils.Executor) (models.Product, error) {
 	l := ProductRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
@@ -213,21 +213,21 @@ func (ProductRepositoryPtr *ProductRepository) UpdateProduct(id uuid.UUID, preUp
 	).Executor().Exec()
 
 	if err != nil {
-		l.Error("ProductRepository.go", "UpdateProduct", "failed to update product", utils.LoggerMeta{"id": id.String()}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "UpdateProduct", "failed to update product", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return preUpdateProduct, err
 	}
 
-	product, err := ProductRepositoryPtr.GetProductById(id, exec...)
+	product, err := ProductRepositoryPtr.GetProductById(ctx, id, exec...)
 	if err != nil {
-		l.Error("ProductRepository.go", "UpdateProduct", "failed to retrieve updated product", utils.LoggerMeta{"id": id.String()}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "UpdateProduct", "failed to retrieve updated product", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return product, err
 	}
 
-	l.Debug("ProductRepository.go", "UpdateProduct", "product updated", utils.LoggerMeta{"id": id.String()})
+	l.Debug(ctx, "ProductRepository.go", "UpdateProduct", "product updated", utils.LoggerMeta{"id": id.String()})
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) DeleteProduct(id uuid.UUID, exec ...utils.Executor) error {
+func (ProductRepositoryPtr *ProductRepository) DeleteProduct(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) error {
 	l := ProductRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
@@ -242,16 +242,16 @@ func (ProductRepositoryPtr *ProductRepository) DeleteProduct(id uuid.UUID, exec 
 	).Executor().Exec()
 
 	if err != nil {
-		l.Error("ProductRepository.go", "DeleteProduct", "failed to delete product", utils.LoggerMeta{"id": id.String()}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "DeleteProduct", "failed to delete product", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
-	l.Debug("ProductRepository.go", "DeleteProduct", "product deleted", utils.LoggerMeta{"id": id.String()})
+	l.Debug(ctx, "ProductRepository.go", "DeleteProduct", "product deleted", utils.LoggerMeta{"id": id.String()})
 	return nil
 }
 
 // GetMyProducts returns products owned by the given user with pagination.
-func (ProductRepositoryPtr *ProductRepository) GetMyProducts(userID uuid.UUID, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+func (ProductRepositoryPtr *ProductRepository) GetMyProducts(ctx utils.RequestContext, userID uuid.UUID, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
 	l := ProductRepositoryPtr.Logger
 
@@ -280,7 +280,7 @@ func (ProductRepositoryPtr *ProductRepository) GetMyProducts(userID uuid.UUID, l
 		ScanStructs(&products)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetMyProducts", "failed to query user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to query user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
@@ -296,10 +296,10 @@ func (ProductRepositoryPtr *ProductRepository) GetMyProducts(userID uuid.UUID, l
 		ScanVal(&total)
 
 	if err != nil {
-		l.Error("ProductRepository.go", "GetMyProducts", "failed to count user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to count user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
-	l.Debug("ProductRepository.go", "GetMyProducts", "user products retrieved", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset, "count": len(products), "total": total})
+	l.Debug(ctx, "ProductRepository.go", "GetMyProducts", "user products retrieved", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset, "count": len(products), "total": total})
 	return products, total, nil
 }

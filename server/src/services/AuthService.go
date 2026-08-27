@@ -42,33 +42,33 @@ func InitAuthService(
 }
 
 // Register creates a new user with a bcrypt-hashed password.
-func (authServicePtr *AuthService) Register(req v1.RegisterRequest) (v1.AuthResponse, error) {
+func (authServicePtr *AuthService) Register(ctx utils.RequestContext, req v1.RegisterRequest) (v1.AuthResponse, error) {
 	var response v1.AuthResponse
 
-	if _, err := authServicePtr.UserManager.GetUserByEmail(req.Email); err == nil {
-		authServicePtr.Logger.Warn("AuthService.go", "Register", "duplicate email", utils.LoggerMeta{"email": req.Email})
+	if _, err := authServicePtr.UserManager.GetUserByEmail(ctx, req.Email); err == nil {
+		authServicePtr.Logger.Warn(ctx, "AuthService.go", "Register", "duplicate email", utils.LoggerMeta{"email": req.Email})
 		return response, ErrDuplicateEmail
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		authServicePtr.Logger.Error("AuthService.go", "Register", "failed to check existing email", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Register", "failed to check existing email", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return response, err
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Register", "failed to hash password", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Register", "failed to hash password", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return response, err
 	}
 
 	tx, err := authServicePtr.Db.Begin()
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Register", "failed to begin transaction", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Register", "failed to begin transaction", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return response, err
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
-	user, err := authServicePtr.UserManager.CreateUser(models.User{
+	user, err := authServicePtr.UserManager.CreateUser(ctx, models.User{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Email:     req.Email,
@@ -76,20 +76,20 @@ func (authServicePtr *AuthService) Register(req v1.RegisterRequest) (v1.AuthResp
 	}, tx)
 	if err != nil {
 		if IsDuplicateEmail(err) {
-			authServicePtr.Logger.Warn("AuthService.go", "Register", "duplicate email on insert", utils.LoggerMeta{"email": req.Email})
+			authServicePtr.Logger.Warn(ctx, "AuthService.go", "Register", "duplicate email on insert", utils.LoggerMeta{"email": req.Email})
 			return response, ErrDuplicateEmail
 		}
-		authServicePtr.Logger.Error("AuthService.go", "Register", "failed to create user", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Register", "failed to create user", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return response, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Register", "failed to commit transaction", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Register", "failed to commit transaction", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return response, err
 	}
 
 	response.User = v1.ToUserResponse(user)
-	authServicePtr.Logger.Debug("AuthService.go", "Register", "user registered", utils.LoggerMeta{"user_id": user.ID.String(), "email": req.Email})
+	authServicePtr.Logger.Debug(ctx, "AuthService.go", "Register", "user registered", utils.LoggerMeta{"user_id": user.ID.String(), "email": req.Email})
 	return response, nil
 }
 
@@ -101,87 +101,87 @@ type LoginResult struct {
 }
 
 // Login verifies credentials and issues an access + refresh token pair.
-func (authServicePtr *AuthService) Login(req v1.LoginRequest) (LoginResult, error) {
+func (authServicePtr *AuthService) Login(ctx utils.RequestContext, req v1.LoginRequest) (LoginResult, error) {
 	var result LoginResult
 
-	user, err := authServicePtr.UserManager.GetUserByEmail(req.Email)
+	user, err := authServicePtr.UserManager.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			authServicePtr.Logger.Warn("AuthService.go", "Login", "user not found", utils.LoggerMeta{"email": req.Email})
+			authServicePtr.Logger.Warn(ctx, "AuthService.go", "Login", "user not found", utils.LoggerMeta{"email": req.Email})
 			return result, ErrInvalidCredentials
 		}
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to get user by email", utils.LoggerMeta{"email": req.Email}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to get user by email", utils.LoggerMeta{"email": req.Email}, err.Error())
 		return result, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		authServicePtr.Logger.Warn("AuthService.go", "Login", "invalid password", utils.LoggerMeta{"email": req.Email})
+		authServicePtr.Logger.Warn(ctx, "AuthService.go", "Login", "invalid password", utils.LoggerMeta{"email": req.Email})
 		return result, ErrInvalidCredentials
 	}
 
 	accessToken, err := utils.GenerateAccessToken(user.ID.String(), authServicePtr.JWTSecret, authServicePtr.AccessTokenTTL)
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to generate access token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to generate access token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
 		return result, err
 	}
 
 	rawRefresh, hashRefresh, err := utils.GenerateRefreshToken()
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to generate refresh token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to generate refresh token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
 		return result, err
 	}
 
 	tx, err := authServicePtr.Db.Begin()
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to begin transaction", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to begin transaction", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
 		return result, err
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
-	if err := authServicePtr.UserManager.CreateRefreshToken(models.RefreshToken{
+	if err := authServicePtr.UserManager.CreateRefreshToken(ctx, models.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: hashRefresh,
 		ExpiresAt: time.Now().Add(authServicePtr.RefreshTokenTTL),
 	}, tx); err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to create refresh token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to create refresh token", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
 		return result, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Login", "failed to commit transaction", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Login", "failed to commit transaction", utils.LoggerMeta{"user_id": user.ID.String()}, err.Error())
 		return result, err
 	}
 
 	result.User = user
 	result.AccessToken = accessToken
 	result.RefreshToken = rawRefresh
-	authServicePtr.Logger.Debug("AuthService.go", "Login", "user logged in", utils.LoggerMeta{"user_id": user.ID.String()})
+	authServicePtr.Logger.Debug(ctx, "AuthService.go", "Login", "user logged in", utils.LoggerMeta{"user_id": user.ID.String()})
 	return result, nil
 }
 
 // Logout revokes all refresh tokens for the user (effective logout).
-func (authServicePtr *AuthService) Logout(userID uuid.UUID) error {
+func (authServicePtr *AuthService) Logout(ctx utils.RequestContext, userID uuid.UUID) error {
 	tx, err := authServicePtr.Db.Begin()
 	if err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Logout", "failed to begin transaction", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Logout", "failed to begin transaction", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
 		return err
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
-	if err := authServicePtr.UserManager.DeleteRefreshTokensByUser(userID, tx); err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Logout", "failed to delete refresh tokens", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
+	if err := authServicePtr.UserManager.DeleteRefreshTokensByUser(ctx, userID, tx); err != nil {
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Logout", "failed to delete refresh tokens", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		authServicePtr.Logger.Error("AuthService.go", "Logout", "failed to commit transaction", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
+		authServicePtr.Logger.Error(ctx, "AuthService.go", "Logout", "failed to commit transaction", utils.LoggerMeta{"user_id": userID.String()}, err.Error())
 		return err
 	}
 
-	authServicePtr.Logger.Debug("AuthService.go", "Logout", "user logged out", utils.LoggerMeta{"user_id": userID.String()})
+	authServicePtr.Logger.Debug(ctx, "AuthService.go", "Logout", "user logged out", utils.LoggerMeta{"user_id": userID.String()})
 	return nil
 }

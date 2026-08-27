@@ -5,8 +5,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/gofiber/fiber/v3"
 )
 
 type Primitive interface {
@@ -15,11 +13,33 @@ type Primitive interface {
 
 type LoggerMeta = map[string]any
 
+// RequestContext abstracts request-scoped data (correlation ID, user ID, etc.).
+// fiber.Ctx already satisfies this via its Locals method.
+type RequestContext interface {
+	Locals(key any, value ...any) any
+}
+
+// CLIContext implements RequestContext for non-HTTP contexts (CLI commands).
+type CLIContext struct {
+	locals map[string]any
+}
+
+func NewCLIContext() *CLIContext {
+	return &CLIContext{locals: make(map[string]any)}
+}
+
+func (c *CLIContext) Locals(key any, value ...any) any {
+	if len(value) > 0 {
+		c.locals[key.(string)] = value[0]
+	}
+	return c.locals[key.(string)]
+}
+
 type Logger interface {
-	Debug(file, method, message string, meta LoggerMeta)
-	Info(file, method, message string, meta LoggerMeta)
-	Warn(file, method, message string, meta LoggerMeta)
-	Error(file, method, message string, meta LoggerMeta, trace string)
+	Debug(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Info(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Warn(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Error(ctx RequestContext, file, method, message string, meta LoggerMeta, trace string)
 }
 
 type StructuredLogger struct{}
@@ -36,24 +56,20 @@ func NewStructuredLogger() *StructuredLogger {
 	return singleTonLogger
 }
 
-func (l *StructuredLogger) Debug(file, method, message string, meta LoggerMeta) {
-	l.logWithLevel("-", "DEBUG", file, method, message, meta, "")
+func (l *StructuredLogger) Debug(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "DEBUG", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Info(file, method, message string, meta LoggerMeta) {
-	l.logWithLevel("-", "INFO", file, method, message, meta, "")
+func (l *StructuredLogger) Info(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "INFO", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Warn(file, method, message string, meta LoggerMeta) {
-	l.logWithLevel("-", "WARN", file, method, message, meta, "")
+func (l *StructuredLogger) Warn(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "WARN", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Error(file, method, message string, meta LoggerMeta, trace string) {
-	l.logWithLevel("-", "ERROR", file, method, message, meta, trace)
-}
-
-func (l *StructuredLogger) LogWithCorrelation(correlationID, level, file, method, message string, meta LoggerMeta) {
-	l.logWithLevel(correlationID, level, file, method, message, meta, "")
+func (l *StructuredLogger) Error(ctx RequestContext, file, method, message string, meta LoggerMeta, trace string) {
+	l.logWithLevel(getCorrelationID(ctx), "ERROR", file, method, message, meta, trace)
 }
 
 func (l *StructuredLogger) logWithLevel(correlationID, level, file, method, message string, meta LoggerMeta, trace string) {
@@ -77,13 +93,20 @@ func (l *StructuredLogger) logWithLevel(correlationID, level, file, method, mess
 	fmt.Println(sb.String())
 }
 
-const LoggerContextKey = "app_logger"
+const (
+	CorrelationIDKey = "correlation_id"
+	LoggerContextKey = "app_logger"
+)
 
-func getLogger(ctx fiber.Ctx) Logger {
+func getCorrelationID(ctx RequestContext) string {
 	if ctx != nil {
-		if logger, ok := ctx.Locals(LoggerContextKey).(Logger); ok {
-			return logger
+		if id, ok := ctx.Locals(CorrelationIDKey).(string); ok {
+			return id
 		}
 	}
-	return NewStructuredLogger()
+	return "-"
+}
+
+func GetCorrelationID(ctx RequestContext) string {
+	return getCorrelationID(ctx)
 }
