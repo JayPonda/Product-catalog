@@ -89,7 +89,7 @@ jobs:
         with:
           version: v2.13.1
           working-directory: server
-          args: run ./...
+          args: ./...
 
       - name: Backend tests with coverage
         working-directory: server
