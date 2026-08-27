@@ -235,7 +235,9 @@ async function submit() {
   loading.value = false
 
   if (!res.ok) {
-    logger.Warn('Register.vue', 'submit', 'registration failed', { error: res.message || 'Registration failed.' })
+    logger.Warn('Register.vue', 'submit', 'registration failed', {
+      error: res.message || 'Registration failed.',
+    })
     error.value = res.message || 'Registration failed.'
     return
   }

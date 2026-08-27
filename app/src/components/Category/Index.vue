@@ -98,7 +98,10 @@ async function addCategory() {
 
 async function fetchCategories() {
   const response = await getCategories(curruntPage.value, curruntLimit)
-  logger.Debug('Category/Index.vue', 'fetchCategories', 'fetch response', { ok: response.ok, data: response.data })
+  logger.Debug('Category/Index.vue', 'fetchCategories', 'fetch response', {
+    ok: response.ok,
+    data: response.data,
+  })
   if (response.ok) {
     if (response.data?.categories?.length > 0) {
       const keys = Object.keys(response.data?.categories[0])

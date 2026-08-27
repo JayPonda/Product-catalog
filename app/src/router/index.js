@@ -107,7 +107,9 @@ router.beforeEach(async (to) => {
     /^\/products\/[^/]+\/edit$/.test(to.path)
 
   if (isProtected && !auth.isAuthenticated) {
-    logger.Warn('router/index.js', 'beforeEach', 'unauthenticated access to protected route', { path: to.path })
+    logger.Warn('router/index.js', 'beforeEach', 'unauthenticated access to protected route', {
+      path: to.path,
+    })
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   return true

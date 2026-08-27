@@ -166,7 +166,10 @@ async function removeProduct(product) {
   openMenuId.value = null
 
   const response = await deleteProduct(product.id)
-  logger.Debug('Product/Index.vue', 'removeProduct', 'delete response', { ok: response.ok, data: response.data })
+  logger.Debug('Product/Index.vue', 'removeProduct', 'delete response', {
+    ok: response.ok,
+    data: response.data,
+  })
   if (response.ok) {
     fetchProducts()
   }
@@ -176,7 +179,10 @@ async function removeProduct(product) {
 async function fetchProducts() {
   const fetchFn = props.myProducts ? getMyProducts : getProducts
   const response = await fetchFn(curruntPage.value, curruntLimit)
-  logger.Debug('Product/Index.vue', 'fetchProducts', 'fetch response', { ok: response.ok, data: response.data })
+  logger.Debug('Product/Index.vue', 'fetchProducts', 'fetch response', {
+    ok: response.ok,
+    data: response.data,
+  })
   if (response.ok) {
     if (response.data?.products.length > 0) {
       const keys = Object.keys(response.data?.products[0])

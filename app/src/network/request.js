@@ -33,11 +33,23 @@ async function request(path, { params, rawData, defaultError, method, ...options
 
     if (!response.ok) {
       if (defaultError === undefined) {
-        logger.Warn('request.js', 'request', `${httpMethod} ${path} failed`, { status: response.status }, correlationId)
+        logger.Warn(
+          'request.js',
+          'request',
+          `${httpMethod} ${path} failed`,
+          { status: response.status },
+          correlationId,
+        )
         return { ok: false, error: response.status }
       }
       const body = await response.json().catch(() => ({}))
-      logger.Warn('request.js', 'request', `${httpMethod} ${path} failed`, { status: response.status, message: body.error ?? defaultError }, correlationId)
+      logger.Warn(
+        'request.js',
+        'request',
+        `${httpMethod} ${path} failed`,
+        { status: response.status, message: body.error ?? defaultError },
+        correlationId,
+      )
       return { ok: false, error: response.status, message: body.error ?? defaultError }
     }
 
@@ -50,7 +62,10 @@ async function request(path, { params, rawData, defaultError, method, ...options
     logger.Debug('request.js', 'request', `${httpMethod} ${path} success`, { correlationId })
     return { ok: true, data }
   } catch (error) {
-    logger.Error('request.js', 'request', `${httpMethod} ${path} error`, { path, error: error.message })
+    logger.Error('request.js', 'request', `${httpMethod} ${path} error`, {
+      path,
+      error: error.message,
+    })
     return { ok: false, error }
   }
 }
