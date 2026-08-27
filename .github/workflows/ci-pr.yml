@@ -1,17 +1,16 @@
-name: CI
+name: CI (PR)
 
+# Runs on PRs into main that target non-main branches. The checks only run once
+# the PR is marked "ready for review" — on label add and on every later push
+# while the label is present. Branches without that label are treated as
+# temporary and are skipped.
 on:
-  push:
-    branches: [main]
   pull_request:
     types: [opened, reopened, synchronize, labeled]
     branches: [main]
 
-# For non-main branches CI only runs once the PR is marked "ready for review"
-# (on label add and on every later push while the label is present).
-# Branches without that label are treated as temporary and skipped.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-pr-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -20,9 +19,8 @@ permissions:
 env:
   RUN_CI: >-
     ${{
-      github.ref_name == 'main' ||
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ready for review'))
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'ready for review')
     }}
   GO_VERSION: "1.26"
   NODE_VERSION: "22"
