@@ -672,3 +672,200 @@ func TestAuthService_Login_CommitFailure(t *testing.T) {
 	_, err := svc.Login(nil, v1.LoginRequest{Email: "a@b.c", Password: "pw"})
 	wantErr(t, err, "Login Commit")
 }
+
+// ---- Additional failure injection: tx.Commit() and InTx paths ----
+
+func TestOrderService_InTx_FunctionFailure(t *testing.T) {
+	svc, mock := newOrderServiceMock(t)
+	mock.ExpectBegin()
+
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		return errBoom
+	})
+	wantErr(t, err, "InTx function failure")
+}
+
+func TestOrderService_InTx_CommitFailure(t *testing.T) {
+	svc, mock := newOrderServiceMock(t)
+	mock.ExpectBegin()
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		return nil
+	})
+	wantErr(t, err, "InTx commit failure")
+}
+
+func TestOrderService_RemoveOrder_CommitFailure(t *testing.T) {
+	svc, mock := newOrderServiceMock(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE .orders.`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	if err := svc.RemoveOrder(nil, uuid.New()); err == nil {
+		t.Error("expected commit failure to propagate")
+	}
+}
+
+func TestProductService_DeleteProduct_CommitFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE .products.`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`.product_categories.`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	if err := svc.DeleteProduct(nil, uuid.New()); err == nil {
+		t.Error("expected commit failure to propagate")
+	}
+}
+
+func TestProductService_CreateProduct_CommitFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	// Name lookup returns no rows (not a duplicate)
+	mock.ExpectQuery(`FROM .products.`).WillReturnRows(emptyRows(productCols))
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO .products.`).WillReturnResult(sqlmock.NewResult(1, 1))
+	// Commit fails
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	_, err := svc.CreateProduct(nil, v1.RequestProduct{Name: "Chair"}, uuid.New())
+	wantErr(t, err, "CreateProduct commit failure")
+}
+
+func TestProductService_UpdateProduct_CommitFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	// Name lookup returns no rows (no duplicate)
+	mock.ExpectQuery(`FROM .products.`).WillReturnRows(emptyRows(productCols))
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE .products.`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	_, err := svc.UpdateProduct(nil, uuid.New(), v1.RequestProduct{Name: "Chair"})
+	wantErr(t, err, "UpdateProduct commit failure")
+}
+
+func TestProductService_LinkCategory_CommitFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	cid := uuid.NewString()
+	linkLookupExpectations(mock, cid)
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO .product_categories.`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	if _, err := svc.LinkCategory(nil, uuid.New(), mustParseID(t, cid)); err == nil {
+		t.Error("expected commit failure to propagate")
+	}
+}
+
+func TestProductService_UnlinkCategory_CommitFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	cid := uuid.NewString()
+	linkLookupExpectations(mock, cid)
+	mock.ExpectBegin()
+	mock.ExpectExec(`.product_categories.`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit().WillReturnError(errBoom)
+
+	if _, err := svc.UnlinkCategory(nil, uuid.New(), mustParseID(t, cid)); err == nil {
+		t.Error("expected commit failure to propagate")
+	}
+}
+
+func TestCategoryService_DeleteCategory_RepoFailure(t *testing.T) {
+	svc, mock := newCategoryServiceMock(t)
+	mock.ExpectExec(`UPDATE .categories.`).WillReturnError(errBoom)
+
+	if err := svc.DeleteCategory(nil, uuid.New()); err == nil {
+		t.Error("expected repo failure to propagate")
+	}
+}
+
+func TestProductService_GetProductById_CategoryLookupFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	pid := uuid.NewString()
+	base := time.Now()
+	// Product lookup succeeds
+	mock.ExpectQuery(`FROM .products.`).
+		WillReturnRows(oneRow(productCols, pid, "Chair", "", 100, 1, uuid.NewString(), base, base, nil))
+	// ProductCategoryManager.GetCategoriesByProduct fails
+	mock.ExpectQuery(`FROM .product_categories.`).WillReturnError(errBoom)
+
+	_, err := svc.GetProductById(nil, mustParseID(t, pid))
+	wantErr(t, err, "GetProductById category lookup")
+}
+
+func TestProductService_GetProductByName_CategoryLookupFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	pid := uuid.NewString()
+	base := time.Now()
+	// Product lookup succeeds
+	mock.ExpectQuery(`FROM .products.`).
+		WillReturnRows(oneRow(productCols, pid, "Chair", "", 100, 1, uuid.NewString(), base, base, nil))
+	// ProductCategoryManager.GetCategoriesByProduct fails
+	mock.ExpectQuery(`FROM .product_categories.`).WillReturnError(errBoom)
+
+	_, err := svc.GetProductByName(nil, "Chair")
+	wantErr(t, err, "GetProductByName category lookup")
+}
+
+func TestProductService_GetProductById_GetCategoriesByProductIdsFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	pid := uuid.NewString()
+	base := time.Now()
+	// Product lookup succeeds
+	mock.ExpectQuery(`FROM .products.`).
+		WillReturnRows(oneRow(productCols, pid, "Chair", "", 100, 1, uuid.NewString(), base, base, nil))
+	// GetCategoriesByProduct succeeds (returns a link)
+	mock.ExpectQuery(`FROM .product_categories.`).
+		WillReturnRows(oneRow(linkCols, uuid.NewString(), pid, uuid.NewString(), base, base, nil))
+	// GetCategoryByIds fails
+	mock.ExpectQuery(`FROM .categories.`).WillReturnError(errBoom)
+
+	_, err := svc.GetProductById(nil, mustParseID(t, pid))
+	wantErr(t, err, "GetProductById GetCategoryByIds failure")
+}
+
+func TestProductService_LinkCategory_BeginFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	cid := uuid.NewString()
+	linkLookupExpectations(mock, cid)
+	mock.ExpectBegin().WillReturnError(errBoom)
+
+	if _, err := svc.LinkCategory(nil, uuid.New(), mustParseID(t, cid)); err == nil {
+		t.Error("expected begin failure to propagate")
+	}
+}
+
+func TestProductService_UnlinkCategory_BeginFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	cid := uuid.NewString()
+	linkLookupExpectations(mock, cid)
+	mock.ExpectBegin().WillReturnError(errBoom)
+
+	if _, err := svc.UnlinkCategory(nil, uuid.New(), mustParseID(t, cid)); err == nil {
+		t.Error("expected begin failure to propagate")
+	}
+}
+
+func TestProductService_DeleteProduct_BeginFailure(t *testing.T) {
+	svc, mock := newProductServiceMock(t)
+	mock.ExpectBegin().WillReturnError(errBoom)
+
+	if err := svc.DeleteProduct(nil, uuid.New()); err == nil {
+		t.Error("expected begin failure to propagate")
+	}
+}
+
+func TestOrderService_ListOrdersInRangeTx_RepoFailure(t *testing.T) {
+	svc, mock := newOrderServiceMock(t)
+	mock.ExpectBegin()
+	tx, err := svc.Db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	mock.ExpectQuery(`FROM .orders.`).WillReturnError(errBoom)
+
+	if _, err := svc.ListOrdersInRangeTx(nil, tx, time.Now(), time.Now(), 10, 0); err == nil {
+		t.Error("expected repo failure to propagate")
+	}
+}

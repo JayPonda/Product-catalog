@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -169,5 +170,35 @@ func TestOrderService_RemoveOrdersTx_Empty_E2E(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("transaction failed: %v", err)
+	}
+}
+
+func TestOrderService_InTx_FnReturnsError(t *testing.T) {
+	svc := newOrderService(t)
+	sentinel := errors.New("fn failed")
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("expected sentinel error, got %v", err)
+	}
+}
+
+func TestOrderService_RemoveOrder_NotFound(t *testing.T) {
+	svc := newOrderService(t)
+	err := svc.RemoveOrder(nil, uuid.New())
+	if err == nil {
+		t.Error("expected error removing non-existent order")
+	}
+}
+
+func TestOrderService_ListOrdersInRangeTx_Error(t *testing.T) {
+	svc := newOrderService(t)
+	err := svc.InTx(nil, func(tx *goqu.TxDatabase) error {
+		_, err := svc.ListOrdersInRangeTx(nil, tx, time.Now(), time.Now(), 10, 0)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
