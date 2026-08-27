@@ -39,7 +39,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 		mode = "manual"
 	}
 
-	logger.Info(nil, "dedup_orders_remove", "start", "dedup run starting", utils.LoggerMeta{
+	logger.Info("dedup_service.go", "RunDedupOrdersRemove", "dedup run starting", utils.LoggerMeta{
 		"mode":    mode,
 		"start":   start.Format(time.RFC3339),
 		"end":     end.Format(time.RFC3339),
@@ -51,7 +51,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 
 	// Split the range into window-sized batches.
 	chunks := SplitRange(start, end, dCfg.Window, dCfg.Nearby)
-	logger.Debug(nil, "dedup_orders_remove", "plan", "range split into sub-windows", utils.LoggerMeta{
+	logger.Debug("dedup_service.go", "RunDedupOrdersRemove", "range split into sub-windows", utils.LoggerMeta{
 		"chunks": len(chunks),
 	})
 
@@ -77,7 +77,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 				defer wg.Done()
 				for i := range jobs {
 					s, e := chunks[i][0], chunks[i][1]
-					logger.Debug(nil, "dedup_orders_remove", "chunk", "processing sub-window", utils.LoggerMeta{
+					logger.Debug("dedup_service.go", "RunDedupOrdersRemove", "processing sub-window", utils.LoggerMeta{
 						"index": i,
 						"start": s.Format(time.RFC3339),
 						"end":   e.Format(time.RFC3339),
@@ -110,7 +110,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 	totalWould := len(seen)
 
 	if dCfg.DryRun {
-		logger.Info(nil, "dedup_orders_remove", "dry_run", "no changes applied (dry-run)", utils.LoggerMeta{
+		logger.Info("dedup_service.go", "RunDedupOrdersRemove", "no changes applied (dry-run)", utils.LoggerMeta{
 			"start":            start.Format(time.RFC3339),
 			"end":              end.Format(time.RFC3339),
 			"chunks":           len(chunks),
@@ -128,7 +128,7 @@ func RunDedupOrdersRemove(start, end time.Time, store DedupStore, dCfg DedupConf
 		return errors.Join(errs...)
 	}
 
-	logger.Info(nil, "dedup_orders_remove", "done", "dedup complete", utils.LoggerMeta{
+	logger.Info("dedup_service.go", "RunDedupOrdersRemove", "dedup complete", utils.LoggerMeta{
 		"start":            start.Format(time.RFC3339),
 		"end":              end.Format(time.RFC3339),
 		"chunks":           len(chunks),
@@ -207,11 +207,11 @@ func ProcessDedupChunk(start, end time.Time, store DedupStore, dCfg DedupConfig,
 		for _, id := range keptIDs {
 			kept = append(kept, fmt.Sprintf("%s@%s", id.String(), byID[id].Format(time.RFC3339)))
 		}
-		logger.Debug(nil, "dedup_orders_remove", "redundant", "orders flagged redundant (earlier ones, would remove)", utils.LoggerMeta{
+		logger.Debug("dedup_service.go", "ProcessDedupChunk", "orders flagged redundant (earlier ones, would remove)", utils.LoggerMeta{
 			"count":     len(redundant),
 			"order_ids": redundant,
 		})
-		logger.Debug(nil, "dedup_orders_remove", "kept", "orders kept (latest of each cluster)", utils.LoggerMeta{
+		logger.Debug("dedup_service.go", "ProcessDedupChunk", "orders kept (latest of each cluster)", utils.LoggerMeta{
 			"count":     len(kept),
 			"order_ids": kept,
 		})

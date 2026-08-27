@@ -6,6 +6,7 @@ import (
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/services"
 	v1 "github.com/JayPonda/Product-catalog/server/src/structs/v1"
+	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 )
@@ -13,12 +14,14 @@ import (
 type CategoryController struct {
 	Service   *services.CategoryService
 	Validator *validator.Validate
+	Logger    *utils.StructuredLogger
 }
 
-func NewCategoryController(service *services.CategoryService) *CategoryController {
+func NewCategoryController(service *services.CategoryService, logger *utils.StructuredLogger) *CategoryController {
 	return &CategoryController{
 		Service:   service,
 		Validator: validator.New(),
+		Logger:    logger,
 	}
 }
 
@@ -34,9 +37,12 @@ func NewCategoryController(service *services.CategoryService) *CategoryControlle
 // @Failure      500    {object}  map[string]string
 // @Router       /categories/match [get]
 func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
+	cc.Logger.Debug("CategoryController.go", "MatchCategories", "request received", nil)
+
 	var query v1.MatchCategoriesQuery
 
 	if err := ctx.Bind().Query(&query); err != nil {
+		cc.Logger.Warn("CategoryController.go", "MatchCategories", "invalid query parameters", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid query parameters",
 			"details": err.Error(),
@@ -44,6 +50,7 @@ func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
 	}
 
 	if err := cc.Validator.Struct(query); err != nil {
+		cc.Logger.Warn("CategoryController.go", "MatchCategories", "validation failed", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "validation failed",
 			"details": err.Error(),
@@ -56,11 +63,13 @@ func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
 
 	categories, err := cc.Service.MatchCategories(query.Name, query.Limit)
 	if err != nil {
+		cc.Logger.Error("CategoryController.go", "MatchCategories", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	cc.Logger.Debug("CategoryController.go", "MatchCategories", "success", utils.LoggerMeta{"name": query.Name, "limit": query.Limit})
 	return ctx.Status(fiber.StatusOK).JSON(v1.MatchCategoriesResponse{Categories: categories})
 }
 
@@ -76,9 +85,12 @@ func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
 // @Failure      500     {object}  map[string]string
 // @Router       /categories [get]
 func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
+	cc.Logger.Debug("CategoryController.go", "ListCategories", "request received", nil)
+
 	var query v1.ListCategoriesQuery
 
 	if err := ctx.Bind().Query(&query); err != nil {
+		cc.Logger.Warn("CategoryController.go", "ListCategories", "invalid query parameters", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid query parameters",
 			"details": err.Error(),
@@ -86,6 +98,7 @@ func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
 	}
 
 	if err := cc.Validator.Struct(query); err != nil {
+		cc.Logger.Warn("CategoryController.go", "ListCategories", "validation failed", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "validation failed",
 			"details": err.Error(),
@@ -98,11 +111,13 @@ func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
 
 	response, err := cc.Service.ListCategories(query.Limit, query.Offset)
 	if err != nil {
+		cc.Logger.Error("CategoryController.go", "ListCategories", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	cc.Logger.Debug("CategoryController.go", "ListCategories", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset})
 	return ctx.JSON(response)
 }
 
@@ -119,9 +134,12 @@ func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
 // @Failure      500       {object}  map[string]string
 // @Router       /categories [post]
 func (cc *CategoryController) CreateCategory(ctx fiber.Ctx) error {
+	cc.Logger.Debug("CategoryController.go", "CreateCategory", "request received", nil)
+
 	var req v1.RequestCategory
 
 	if err := ctx.Bind().JSON(&req); err != nil {
+		cc.Logger.Warn("CategoryController.go", "CreateCategory", "invalid request body", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid request body",
 			"details": err.Error(),
@@ -129,6 +147,7 @@ func (cc *CategoryController) CreateCategory(ctx fiber.Ctx) error {
 	}
 
 	if err := cc.Validator.Struct(req); err != nil {
+		cc.Logger.Warn("CategoryController.go", "CreateCategory", "validation failed", utils.LoggerMeta{"error": err.Error()})
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "validation failed",
 			"details": err.Error(),
@@ -138,19 +157,23 @@ func (cc *CategoryController) CreateCategory(ctx fiber.Ctx) error {
 	category, err := cc.Service.CreateCategory(models.Category{Name: req.Name})
 	if err != nil {
 		if errors.Is(err, services.ErrEmptyCategoryName) {
+			cc.Logger.Warn("CategoryController.go", "CreateCategory", "empty category name", nil)
 			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if errors.Is(err, services.ErrDuplicateCategoryName) {
+			cc.Logger.Warn("CategoryController.go", "CreateCategory", "duplicate category name", utils.LoggerMeta{"name": req.Name})
 			return ctx.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		cc.Logger.Error("CategoryController.go", "CreateCategory", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	cc.Logger.Info("CategoryController.go", "CreateCategory", "category created", utils.LoggerMeta{"id": category.ID.String(), "name": category.Name})
 	return ctx.Status(fiber.StatusCreated).JSON(category)
 }

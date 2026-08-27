@@ -11,8 +11,10 @@
         "golangci",
         "goqu",
         "logln",
+        "mseed",
         "oxlint",
         "perr",
-        "Ponda"
+        "Ponda",
+        "rubenv"
     ]
 }

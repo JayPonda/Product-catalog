@@ -96,6 +96,7 @@
 <script setup>
 import { onMounted, reactive, watch } from 'vue'
 import { getProduct, createProduct, updateProduct } from '@/network/request'
+import logger from '@/utils/logger'
 
 const props = defineProps({
   productId: {
@@ -122,8 +123,10 @@ const fieldErrors = reactive({
 
 async function fetchProductInformation() {
   if (props.productId) {
+    logger.Debug('ProductForm.vue', 'fetchProductInformation', 'fetching product', { id: props.productId })
     const data = await getProduct(props.productId)
     if (!data.ok) {
+      logger.Warn('ProductForm.vue', 'fetchProductInformation', 'failed to load product', { error: String(data.error ?? '') })
       emit('error', String(data.error ?? ''))
       return
     }
@@ -131,6 +134,7 @@ async function fetchProductInformation() {
     formData.description = data.data.description ?? ''
     formData.stock_quantity = data.data.stock_quantity ?? ''
     formData.price = data.data.price != null ? (data.data.price / 100).toFixed(2) : ''
+    logger.Debug('ProductForm.vue', 'fetchProductInformation', 'product loaded', { name: formData.name })
   }
 }
 
@@ -196,6 +200,7 @@ async function saveProduct() {
   if (!validateForm()) return
   const payload = { ...formData, price: priceToCents(formData.price) }
   emit('error', '')
+  logger.Debug('ProductForm.vue', 'saveProduct', props.productId ? 'updating product' : 'creating product', { name: payload.name })
 
   let response
   if (props.productId) {
@@ -205,10 +210,12 @@ async function saveProduct() {
   }
 
   if (!response.ok) {
+    logger.Warn('ProductForm.vue', 'saveProduct', 'failed to save product', { error: String(response.error ?? '') })
     emit('error', String(response.error ?? ''))
     return
   }
 
+  logger.Info('ProductForm.vue', 'saveProduct', 'product saved', { id: response.data?.id })
   emit('saved', response.data)
 }
 

@@ -35,15 +35,15 @@ func dedupOrdersRemoveCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.
 				// manual mode: both --starttime and --endtime supplied (RFC3339).
 				var err error
 				if start, err = time.Parse(time.RFC3339, dedupStart); err != nil {
-					logger.Error(nil, "dedup_orders_remove", "config", "invalid --starttime", utils.LoggerMeta{"value": dedupStart}, err.Error())
+					logger.Error("dedup_orders_remove.go", "RunE", "invalid --starttime", utils.LoggerMeta{"value": dedupStart}, err.Error())
 					return fmt.Errorf("invalid --starttime %q: %w", dedupStart, err)
 				}
 				if end, err = time.Parse(time.RFC3339, dedupEnd); err != nil {
-					logger.Error(nil, "dedup_orders_remove", "config", "invalid --endtime", utils.LoggerMeta{"value": dedupEnd}, err.Error())
+					logger.Error("dedup_orders_remove.go", "RunE", "invalid --endtime", utils.LoggerMeta{"value": dedupEnd}, err.Error())
 					return fmt.Errorf("invalid --endtime %q: %w", dedupEnd, err)
 				}
 				if !end.After(start) {
-					logger.Error(nil, "dedup_orders_remove", "config", "end must be after start", utils.LoggerMeta{"start": dedupStart, "end": dedupEnd}, "")
+					logger.Error("dedup_orders_remove.go", "RunE", "end must be after start", utils.LoggerMeta{"start": dedupStart, "end": dedupEnd}, "")
 					return fmt.Errorf("--endtime %q must be after --starttime %q", dedupEnd, dedupStart)
 				}
 			} else {
@@ -58,12 +58,12 @@ func dedupOrdersRemoveCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.
 
 			orderRepo, err := repositories.InitOrderRepository(db, logger)
 			if err != nil {
-				logger.Error(nil, "dedup_orders_remove", "init", "failed to init order repository", nil, err.Error())
+				logger.Error("dedup_orders_remove.go", "RunE", "failed to init order repository", nil, err.Error())
 				return err
 			}
 			orderSvc, err := services.InitOrderService(db, logger, orderRepo)
 			if err != nil {
-				logger.Error(nil, "dedup_orders_remove", "init", "failed to init order service", nil, err.Error())
+				logger.Error("dedup_orders_remove.go", "RunE", "failed to init order service", nil, err.Error())
 				return err
 			}
 

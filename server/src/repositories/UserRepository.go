@@ -27,6 +27,7 @@ func InitUserRepository(db *goqu.Database, logger *utils.StructuredLogger) (*Use
 
 func (userRepositoryPtr *UserRepository) GetUserByEmail(email string, exec ...utils.Executor) (models.User, error) {
 	var user models.User
+	l := userRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
@@ -49,10 +50,12 @@ func (userRepositoryPtr *UserRepository) GetUserByEmail(email string, exec ...ut
 		ScanStruct(&user)
 
 	if err != nil {
+		l.Error("UserRepository.go", "GetUserByEmail", "failed to query user by email", utils.LoggerMeta{"email": email}, err.Error())
 		return user, err
 	}
 
 	if !found {
+		l.Warn("UserRepository.go", "GetUserByEmail", "user not found by email", utils.LoggerMeta{"email": email})
 		return user, sql.ErrNoRows
 	}
 
@@ -61,6 +64,7 @@ func (userRepositoryPtr *UserRepository) GetUserByEmail(email string, exec ...ut
 
 func (userRepositoryPtr *UserRepository) GetUserById(id uuid.UUID, exec ...utils.Executor) (models.User, error) {
 	var user models.User
+	l := userRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
@@ -83,10 +87,12 @@ func (userRepositoryPtr *UserRepository) GetUserById(id uuid.UUID, exec ...utils
 		ScanStruct(&user)
 
 	if err != nil {
+		l.Error("UserRepository.go", "GetUserById", "failed to query user by id", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return user, err
 	}
 
 	if !found {
+		l.Warn("UserRepository.go", "GetUserById", "user not found by id", utils.LoggerMeta{"id": id.String()})
 		return user, sql.ErrNoRows
 	}
 
@@ -94,8 +100,11 @@ func (userRepositoryPtr *UserRepository) GetUserById(id uuid.UUID, exec ...utils
 }
 
 func (userRepositoryPtr *UserRepository) CreateUser(user models.User, exec ...utils.Executor) (models.User, error) {
+	l := userRepositoryPtr.Logger
+
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error("UserRepository.go", "CreateUser", "failed to generate UUID", nil, err.Error())
 		return user, err
 	}
 
@@ -112,13 +121,23 @@ func (userRepositoryPtr *UserRepository) CreateUser(user models.User, exec ...ut
 	).Executor().Exec()
 
 	if err != nil {
+		l.Error("UserRepository.go", "CreateUser", "failed to insert user", utils.LoggerMeta{"email": user.Email}, err.Error())
 		return user, err
 	}
 
-	return userRepositoryPtr.GetUserById(id, exec...)
+	created, err := userRepositoryPtr.GetUserById(id, exec...)
+	if err != nil {
+		l.Error("UserRepository.go", "CreateUser", "failed to retrieve created user", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return user, err
+	}
+
+	l.Debug("UserRepository.go", "CreateUser", "user created", utils.LoggerMeta{"id": id.String(), "email": user.Email})
+	return created, nil
 }
 
 func (userRepositoryPtr *UserRepository) SoftDeleteUser(id uuid.UUID, exec ...utils.Executor) error {
+	l := userRepositoryPtr.Logger
+
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
 	_, err := db.Update(USER_DB).Set(
@@ -130,12 +149,21 @@ func (userRepositoryPtr *UserRepository) SoftDeleteUser(id uuid.UUID, exec ...ut
 		goqu.C("deleted_at").IsNull(),
 	).Executor().Exec()
 
-	return err
+	if err != nil {
+		l.Error("UserRepository.go", "SoftDeleteUser", "failed to soft delete user", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return err
+	}
+
+	l.Debug("UserRepository.go", "SoftDeleteUser", "user soft deleted", utils.LoggerMeta{"id": id.String()})
+	return nil
 }
 
 func (userRepositoryPtr *UserRepository) CreateRefreshToken(token models.RefreshToken, exec ...utils.Executor) error {
+	l := userRepositoryPtr.Logger
+
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error("UserRepository.go", "CreateRefreshToken", "failed to generate UUID", nil, err.Error())
 		return err
 	}
 
@@ -150,7 +178,13 @@ func (userRepositoryPtr *UserRepository) CreateRefreshToken(token models.Refresh
 		},
 	).Executor().Exec()
 
-	return err
+	if err != nil {
+		l.Error("UserRepository.go", "CreateRefreshToken", "failed to insert refresh token", utils.LoggerMeta{"user_id": token.UserID.String()}, err.Error())
+		return err
+	}
+
+	l.Debug("UserRepository.go", "CreateRefreshToken", "refresh token created", utils.LoggerMeta{"user_id": token.UserID.String()})
+	return nil
 }
 
 func (userRepositoryPtr *UserRepository) GetRefreshTokenByHash(tokenHash string, exec ...utils.Executor) (models.RefreshToken, error) {

@@ -58,16 +58,23 @@ func (productServicePtr *ProductService) GetProductById(id uuid.UUID) (v1.Respon
 	products, err := productServicePtr.ProductManager.GetProductById(id)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "GetProductById", "product not found", utils.LoggerMeta{"id": id.String()})
+		} else {
+			productServicePtr.Logger.Error("ProductService.go", "GetProductById", "failed to get product", utils.LoggerMeta{"id": id.String()}, err.Error())
+		}
 		return responseProduct, err
 	}
 
 	categories, err := productServicePtr.getProductsCategory(id)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "GetProductById", "failed to get product categories", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return responseProduct, err
 	}
 
 	responseProduct.Product = products
 	responseProduct.Categories = categories
+	productServicePtr.Logger.Debug("ProductService.go", "GetProductById", "product retrieved", utils.LoggerMeta{"id": id.String(), "name": products.Name})
 	return responseProduct, nil
 }
 
@@ -77,16 +84,23 @@ func (productServicePtr *ProductService) GetProductByName(name string) (v1.Respo
 	products, err := productServicePtr.ProductManager.GetProductByName(name)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "GetProductByName", "product not found", utils.LoggerMeta{"name": name})
+		} else {
+			productServicePtr.Logger.Error("ProductService.go", "GetProductByName", "failed to get product", utils.LoggerMeta{"name": name}, err.Error())
+		}
 		return responseProduct, err
 	}
 
 	categories, err := productServicePtr.getProductsCategory(products.ID)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "GetProductByName", "failed to get product categories", utils.LoggerMeta{"name": name}, err.Error())
 		return responseProduct, err
 	}
 
 	responseProduct.Product = products
 	responseProduct.Categories = categories
+	productServicePtr.Logger.Debug("ProductService.go", "GetProductByName", "product retrieved", utils.LoggerMeta{"id": products.ID.String(), "name": name})
 	return responseProduct, nil
 
 }
@@ -96,6 +110,7 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 
 	products, total, err := productServicePtr.ProductManager.GetProducts(limit, offset)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "ListProducts", "failed to list products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return response, err
 	}
 
@@ -109,6 +124,7 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 	if len(productIDs) > 0 {
 		links, err := productServicePtr.ProductCategoryManager.GetCategoriesByProductIds(productIDs)
 		if err != nil {
+			productServicePtr.Logger.Error("ProductService.go", "ListProducts", "failed to get product category links", utils.LoggerMeta{"product_count": len(productIDs)}, err.Error())
 			return response, err
 		}
 
@@ -124,6 +140,7 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 
 		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(categoryIDs)
 		if err != nil {
+			productServicePtr.Logger.Error("ProductService.go", "ListProducts", "failed to get categories", utils.LoggerMeta{"category_count": len(categoryIDs)}, err.Error())
 			return response, err
 		}
 
@@ -152,20 +169,24 @@ func (productServicePtr *ProductService) ListProducts(limit int, offset int) (v1
 	response.Limit = limit
 	response.Offset = offset
 
+	productServicePtr.Logger.Debug("ProductService.go", "ListProducts", "products listed", utils.LoggerMeta{"count": len(items), "total": total})
 	return response, nil
 }
 
 func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct, userID uuid.UUID) (v1.ResponseProduct, error) {
 	_, err := productServicePtr.ProductManager.GetProductByName(product.Name)
 	if err == nil {
+		productServicePtr.Logger.Warn("ProductService.go", "CreateProduct", "duplicate product name", utils.LoggerMeta{"name": product.Name})
 		return v1.ResponseProduct{}, ErrDuplicateProductName
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
+		productServicePtr.Logger.Error("ProductService.go", "CreateProduct", "failed to check duplicate product name", utils.LoggerMeta{"name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "CreateProduct", "failed to begin transaction", utils.LoggerMeta{"name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
@@ -182,15 +203,19 @@ func (productServicePtr *ProductService) CreateProduct(product v1.RequestProduct
 	}, tx)
 	if err != nil {
 		if IsDuplicateProductName(err) {
+			productServicePtr.Logger.Warn("ProductService.go", "CreateProduct", "duplicate product name on insert", utils.LoggerMeta{"name": product.Name})
 			return v1.ResponseProduct{}, ErrDuplicateProductName
 		}
+		productServicePtr.Logger.Error("ProductService.go", "CreateProduct", "failed to create product", utils.LoggerMeta{"name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "CreateProduct", "failed to commit transaction", utils.LoggerMeta{"name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
+	productServicePtr.Logger.Debug("ProductService.go", "CreateProduct", "product created", utils.LoggerMeta{"id": dbProduct.ID.String(), "name": product.Name})
 	return productServicePtr.GetProductById(dbProduct.ID)
 }
 
@@ -200,6 +225,7 @@ func (productServicePtr *ProductService) ListMyProducts(userID uuid.UUID, limit 
 
 	products, total, err := productServicePtr.ProductManager.GetMyProducts(userID, limit, offset)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "ListMyProducts", "failed to list user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
 		return response, err
 	}
 
@@ -213,6 +239,7 @@ func (productServicePtr *ProductService) ListMyProducts(userID uuid.UUID, limit 
 	if len(productIDs) > 0 {
 		links, err := productServicePtr.ProductCategoryManager.GetCategoriesByProductIds(productIDs)
 		if err != nil {
+			productServicePtr.Logger.Error("ProductService.go", "ListMyProducts", "failed to get product category links", utils.LoggerMeta{"user_id": userID.String(), "product_count": len(productIDs)}, err.Error())
 			return response, err
 		}
 
@@ -228,6 +255,7 @@ func (productServicePtr *ProductService) ListMyProducts(userID uuid.UUID, limit 
 
 		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(categoryIDs)
 		if err != nil {
+			productServicePtr.Logger.Error("ProductService.go", "ListMyProducts", "failed to get categories", utils.LoggerMeta{"user_id": userID.String(), "category_count": len(categoryIDs)}, err.Error())
 			return response, err
 		}
 
@@ -256,20 +284,24 @@ func (productServicePtr *ProductService) ListMyProducts(userID uuid.UUID, limit 
 	response.Limit = limit
 	response.Offset = offset
 
+	productServicePtr.Logger.Debug("ProductService.go", "ListMyProducts", "user products listed", utils.LoggerMeta{"user_id": userID.String(), "count": len(items), "total": total})
 	return response, nil
 }
 
 func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.RequestProduct) (v1.ResponseProduct, error) {
 	existing, err := productServicePtr.ProductManager.GetProductByName(product.Name)
 	if err == nil && existing.ID != id {
+		productServicePtr.Logger.Warn("ProductService.go", "UpdateProduct", "duplicate product name", utils.LoggerMeta{"id": id.String(), "name": product.Name})
 		return v1.ResponseProduct{}, ErrDuplicateProductName
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		productServicePtr.Logger.Error("ProductService.go", "UpdateProduct", "failed to check duplicate product name", utils.LoggerMeta{"id": id.String(), "name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "UpdateProduct", "failed to begin transaction", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
@@ -285,15 +317,19 @@ func (productServicePtr *ProductService) UpdateProduct(id uuid.UUID, product v1.
 	}, tx)
 	if err != nil {
 		if IsDuplicateProductName(err) {
+			productServicePtr.Logger.Warn("ProductService.go", "UpdateProduct", "duplicate product name on update", utils.LoggerMeta{"id": id.String(), "name": product.Name})
 			return v1.ResponseProduct{}, ErrDuplicateProductName
 		}
+		productServicePtr.Logger.Error("ProductService.go", "UpdateProduct", "failed to update product", utils.LoggerMeta{"id": id.String(), "name": product.Name}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "UpdateProduct", "failed to commit transaction", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return v1.ResponseProduct{}, err
 	}
 
+	productServicePtr.Logger.Debug("ProductService.go", "UpdateProduct", "product updated", utils.LoggerMeta{"id": id.String(), "name": product.Name})
 	return productServicePtr.GetProductById(id)
 }
 
@@ -304,20 +340,25 @@ func (productServicePtr *ProductService) LinkCategory(productID uuid.UUID, categ
 
 	if _, err := productServicePtr.ProductManager.GetProductById(productID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "LinkCategory", "product not found", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 			return response, ErrProductNotFound
 		}
+		productServicePtr.Logger.Error("ProductService.go", "LinkCategory", "failed to get product", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	if _, err := productServicePtr.CategoryManager.GetCategoryById(categoryID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "LinkCategory", "category not found", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 			return response, ErrCategoryNotFound
 		}
+		productServicePtr.Logger.Error("ProductService.go", "LinkCategory", "failed to get category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "LinkCategory", "failed to begin transaction", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
@@ -326,13 +367,16 @@ func (productServicePtr *ProductService) LinkCategory(productID uuid.UUID, categ
 	}()
 
 	if err := productServicePtr.ProductCategoryManager.LinkCategory(productID, categoryID, tx); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "LinkCategory", "failed to link category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "LinkCategory", "failed to commit transaction", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
+	productServicePtr.Logger.Debug("ProductService.go", "LinkCategory", "category linked to product", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 	return productServicePtr.GetProductById(productID)
 }
 
@@ -342,20 +386,25 @@ func (productServicePtr *ProductService) UnlinkCategory(productID uuid.UUID, cat
 
 	if _, err := productServicePtr.ProductManager.GetProductById(productID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "UnlinkCategory", "product not found", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 			return response, ErrProductNotFound
 		}
+		productServicePtr.Logger.Error("ProductService.go", "UnlinkCategory", "failed to get product", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	if _, err := productServicePtr.CategoryManager.GetCategoryById(categoryID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			productServicePtr.Logger.Warn("ProductService.go", "UnlinkCategory", "category not found", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 			return response, ErrCategoryNotFound
 		}
+		productServicePtr.Logger.Error("ProductService.go", "UnlinkCategory", "failed to get category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "UnlinkCategory", "failed to begin transaction", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
@@ -364,19 +413,23 @@ func (productServicePtr *ProductService) UnlinkCategory(productID uuid.UUID, cat
 	}()
 
 	if err := productServicePtr.ProductCategoryManager.UnlinkCategory(productID, categoryID, tx); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "UnlinkCategory", "failed to unlink category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "UnlinkCategory", "failed to commit transaction", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return response, err
 	}
 
+	productServicePtr.Logger.Debug("ProductService.go", "UnlinkCategory", "category unlinked from product", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 	return productServicePtr.GetProductById(productID)
 }
 
 func (productServicePtr *ProductService) DeleteProduct(id uuid.UUID) error {
 	tx, err := productServicePtr.Db.Begin()
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "DeleteProduct", "failed to begin transaction", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
@@ -386,13 +439,21 @@ func (productServicePtr *ProductService) DeleteProduct(id uuid.UUID) error {
 
 	err = productServicePtr.ProductManager.DeleteProduct(id, tx)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "DeleteProduct", "failed to delete product", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
 	err = productServicePtr.ProductCategoryManager.DeleteProductCategories(id, tx)
 	if err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "DeleteProduct", "failed to delete product categories", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		productServicePtr.Logger.Error("ProductService.go", "DeleteProduct", "failed to commit transaction", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return err
+	}
+
+	productServicePtr.Logger.Debug("ProductService.go", "DeleteProduct", "product deleted", utils.LoggerMeta{"id": id.String()})
+	return nil
 }

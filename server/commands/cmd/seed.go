@@ -37,9 +37,12 @@ func seedCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			db := utils.InitDB(cfg)
 
+			logger.Info("seed.go", "RunE", "seed started", utils.LoggerMeta{"csv": seedCSV})
+
 			// --- 1. read the source CSV ---
 			f, err := os.Open(seedCSV)
 			if err != nil {
+				logger.Error("seed.go", "RunE", "failed to open csv", utils.LoggerMeta{"path": seedCSV}, err.Error())
 				return fmt.Errorf("failed to open csv %q: %w", seedCSV, err)
 			}
 			defer f.Close()
@@ -48,13 +51,16 @@ func seedCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.Command {
 			reader.FieldsPerRecord = -1
 			rows, err := reader.ReadAll()
 			if err != nil {
+				logger.Error("seed.go", "RunE", "failed to parse csv", nil, err.Error())
 				return fmt.Errorf("failed to parse csv: %w", err)
 			}
 			if len(rows) < 2 {
+				logger.Warn("seed.go", "RunE", "csv has no data rows", nil)
 				return fmt.Errorf("csv has no data rows")
 			}
 			header := rows[0]
 			if len(header) < 3 {
+				logger.Warn("seed.go", "RunE", "csv missing required columns", nil)
 				return fmt.Errorf("csv must have at least: customer_id, order_value, timestamp")
 			}
 
@@ -163,10 +169,7 @@ func seedCmd(cfg AppConfig, logger *utils.StructuredLogger) *cobra.Command {
 			usersW.Flush()
 			ordersW.Flush()
 
-			fmt.Printf("Seed complete: %d user(s) inserted, %d order(s) inserted.\n", usersCreated, ordersCreated)
-			fmt.Printf("Enriched data written to %s and %s\n",
-				filepath.Join(dir, "users_seed.csv"),
-				filepath.Join(dir, "orders_enriched.csv"))
+			logger.Info("seed.go", "RunE", "seed completed", utils.LoggerMeta{"users_created": usersCreated, "orders_created": ordersCreated})
 			return nil
 		},
 	}

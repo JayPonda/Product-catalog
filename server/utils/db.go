@@ -51,6 +51,8 @@ func InitDB(cfg DBConfigProvider) *goqu.Database {
 		// 4. Wrap with goqu dialect and store into singleton state
 		dialect := goqu.Dialect(cfg.GetDialect())
 		goquDBInstance = dialect.DB(db)
+
+		log.Println("Database connection established successfully")
 	})
 
 	return goquDBInstance

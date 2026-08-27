@@ -59,6 +59,7 @@ import { getCategories, createCategory } from '@/network/request.js'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorStore } from '@/stores/errors'
 import BaseTable from '@/components/table/BaseTable.vue'
+import logger from '@/utils/logger'
 
 const auth = useAuthStore()
 const error = useErrorStore()
@@ -97,11 +98,11 @@ async function addCategory() {
 
 async function fetchCategories() {
   const response = await getCategories(curruntPage.value, curruntLimit)
-  console.log(response.ok, response.data)
+  logger.Debug('Category/Index.vue', 'fetchCategories', 'fetch response', { ok: response.ok, data: response.data })
   if (response.ok) {
     if (response.data?.categories?.length > 0) {
       const keys = Object.keys(response.data?.categories[0])
-      console.log(keys)
+      logger.Debug('Category/Index.vue', 'fetchCategories', 'column keys', { keys })
       categoryTableTitle.value = keys
     }
 

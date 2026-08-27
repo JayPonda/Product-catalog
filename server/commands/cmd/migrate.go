@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq" // register the postgres driver for database/sql
-	"github.com/rubenv/sql-migrate"
+	"github.com/JayPonda/Product-catalog/server/utils"
+	_ "github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
 )
 
@@ -200,6 +201,7 @@ func openDB() (*sql.DB, error) {
 func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
 	db, err := openDB()
 	if err != nil {
+		appLogger.Error("migrate.go", "runMigrations", "failed to open database", nil, err.Error())
 		return err
 	}
 	defer db.Close()
@@ -208,23 +210,17 @@ func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
 
 	var applied int
 
-	// sql-migrate has no variadic `steps`: `Exec` applies everything in the
-	// given direction, while `ExecMax` limits how many are applied/rolled back.
 	if direction == migrate.Down && len(steps) > 0 && steps[0] > 0 {
 		applied, err = migrate.ExecMax(db, appConfig.GetDialect(), source, migrate.Down, steps[0])
 	} else {
 		applied, err = migrate.Exec(db, appConfig.GetDialect(), source, direction)
 	}
 	if err != nil {
-		// Surface the exact failure so the user can fix the file and re-run `up`.
+		appLogger.Error("migrate.go", "runMigrations", "migration failed", utils.LoggerMeta{"direction": fmt.Sprintf("%v", direction)}, err.Error())
 		return fmt.Errorf("migration %v failed: %w", direction, err)
 	}
 
-	label := "applied"
-	if direction == migrate.Down {
-		label = "rolled back"
-	}
-	fmt.Printf("%s %d migration(s) [%v]\n", label, applied, direction)
+	appLogger.Info("migrate.go", "runMigrations", "migrations completed", utils.LoggerMeta{"applied": applied, "direction": fmt.Sprintf("%v", direction)})
 	return nil
 }
 
@@ -238,6 +234,7 @@ func runMigrations(direction migrate.MigrationDirection, steps ...int) error {
 func runSeed() error {
 	db, err := openDB()
 	if err != nil {
+		appLogger.Error("migrate.go", "runSeed", "failed to open database", nil, err.Error())
 		return err
 	}
 	defer db.Close()
@@ -245,37 +242,34 @@ func runSeed() error {
 	dialect := appConfig.GetDialect()
 	source := &migrate.FileMigrationSource{Dir: migrationsDir}
 
-	// Ensure gorp_migrations exists and get the handle the library uses to
-	// record migrations (so we never hand-write its schema/columns).
 	_, dbMap, err := migrate.PlanMigration(db, dialect, source, migrate.Up, 0)
 	if err != nil {
-		return fmt.Errorf("failed to initialise migration table: %w", err)
+		appLogger.Error("migrate.go", "runSeed", "failed to initialize migration table", nil, err.Error())
+		return fmt.Errorf("failed to initialize migration table: %w", err)
 	}
 
-	// Latest already recorded in the new table.
 	recordedLatest, err := recordedMaxVersion(db)
 	if err != nil {
+		appLogger.Error("migrate.go", "runSeed", "failed to read gorp_migrations", nil, err.Error())
 		return err
 	}
 
-	// Latest applied by the previous tool.
 	previousLatest, err := previousLatestVersion(db)
 	if err != nil {
+		appLogger.Error("migrate.go", "runSeed", "failed to read previous migrations", nil, err.Error())
 		return err
 	}
 	if previousLatest == 0 {
-		fmt.Println("No previous migrations found — nothing to seed (use `migrate up` on a fresh database).")
+		appLogger.Info("migrate.go", "runSeed", "no previous migrations found, nothing to seed", nil)
 		return nil
 	}
 
-	// Migration files on disk, ordered by parsed timestamp.
 	ids, err := migrationFileIDs(migrationsDir)
 	if err != nil {
+		appLogger.Error("migrate.go", "runSeed", "failed to read migration files", nil, err.Error())
 		return err
 	}
 
-	// Record every migration from gorp_migrations' latest up to the previous
-	// tool's latest, so the new table replicates the applied set exactly.
 	var seeded int
 	for _, id := range ids {
 		version, ok := migrationVersion(id)
@@ -283,24 +277,25 @@ func runSeed() error {
 			continue
 		}
 		if version <= recordedLatest {
-			continue // already recorded
+			continue
 		}
 		if version > previousLatest {
-			continue // not applied by the previous tool
+			continue
 		}
 		if err := dbMap.Insert(&migrate.MigrationRecord{Id: id, AppliedAt: time.Now()}); err != nil {
 			if isDuplicateKey(err) {
-				continue // already recorded on a previous run
+				continue
 			}
+			appLogger.Error("migrate.go", "runSeed", "failed to seed migration", utils.LoggerMeta{"id": id}, err.Error())
 			return fmt.Errorf("failed to seed migration %s: %w", id, err)
 		}
 		seeded++
 	}
 
 	if seeded == 0 {
-		fmt.Println("gorp_migrations already up to date with previous migrations.")
+		appLogger.Info("migrate.go", "runSeed", "gorp_migrations already up to date", nil)
 	} else {
-		fmt.Printf("Seeded %d previous migration(s) into gorp_migrations.\n", seeded)
+		appLogger.Info("migrate.go", "runSeed", "seed completed", utils.LoggerMeta{"seeded": seeded})
 	}
 	return nil
 }

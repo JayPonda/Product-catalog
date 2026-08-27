@@ -112,6 +112,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProduct, searchCategory, linkCategory, unlinkCategory } from '@/network/request'
+import logger from '@/utils/logger'
 
 const props = defineProps({
   productId: {
@@ -151,11 +152,14 @@ const visibleCategoryResults = computed(() => {
 async function fetchLinkedCategories() {
   if (props.productId) {
     emit('error', '')
+    logger.Debug('CategoryLinker.vue', 'fetchLinkedCategories', 'fetching linked categories', { productId: props.productId })
     const response = await getProduct(props.productId)
     if (response.ok) {
       productCategories.value = response.data.categories ?? []
       savedCategoryIds.value = new Set(productCategories.value.map((c) => c.id))
+      logger.Debug('CategoryLinker.vue', 'fetchLinkedCategories', 'linked categories loaded', { count: productCategories.value.length })
     } else {
+      logger.Warn('CategoryLinker.vue', 'fetchLinkedCategories', 'failed to load linked categories', { error: String(response.error ?? '') })
       emit('error', String(response.error ?? ''))
     }
   }
@@ -174,9 +178,11 @@ async function unlinkProductCategory(category) {
   const data = await unlinkCategory(props.productId, category.id)
   busyCategoryId.value = null
   if (data.ok) {
+    logger.Debug('CategoryLinker.vue', 'unlinkProductCategory', 'category unlinked', { categoryId: category.id })
     savedCategoryIds.value.delete(category.id)
     productCategories.value = productCategories.value.filter((item) => item.id !== category.id)
   } else {
+    logger.Warn('CategoryLinker.vue', 'unlinkProductCategory', 'failed to unlink category', { categoryId: category.id, error: String(data.error ?? '') })
     emit('error', String(data.error ?? ''))
   }
 }
@@ -193,6 +199,7 @@ watch(categorySearch, (value) => {
     const data = await searchCategory(query)
     categoryResults.value = data.ok ? data.data.categories : []
     categoryDropdownOpen.value = true
+    logger.Debug('CategoryLinker.vue', 'searchCategory', 'category search completed', { query, results: categoryResults.value.length })
   }, 250)
 })
 
@@ -218,8 +225,10 @@ async function addCategories() {
     const data = await linkCategory(props.productId, category.id)
     if (data.ok) {
       savedCategoryIds.value.add(category.id)
+      logger.Debug('CategoryLinker.vue', 'addCategories', 'category linked', { categoryId: category.id })
     } else {
       failures.push(category.name)
+      logger.Warn('CategoryLinker.vue', 'addCategories', 'failed to link category', { categoryId: category.id, error: String(data.error ?? '') })
     }
   }
   addingCategories.value = false

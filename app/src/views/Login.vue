@@ -97,6 +97,7 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Eye, EyeOff } from '@lucide/vue'
+import logger from '@/utils/logger'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -117,15 +118,18 @@ async function submit() {
   error.value = ''
   if (!validate()) return
 
+  logger.Debug('Login.vue', 'submit', 'login attempt', { email: form.email.trim() })
   loading.value = true
   const res = await auth.login({ email: form.email.trim(), password: form.password })
   loading.value = false
 
   if (!res.ok) {
+    logger.Warn('Login.vue', 'submit', 'login failed', { error: res.message || 'Login failed.' })
     error.value = res.message || 'Login failed.'
     return
   }
 
+  logger.Info('Login.vue', 'submit', 'login successful')
   router.push('/products')
 }
 </script>

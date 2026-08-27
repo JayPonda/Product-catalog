@@ -173,6 +173,7 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Eye, EyeOff } from '@lucide/vue'
+import logger from '@/utils/logger'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -223,6 +224,7 @@ async function submit() {
   error.value = ''
   if (!validate()) return
 
+  logger.Debug('Register.vue', 'submit', 'registration attempt', { email: form.email.trim() })
   loading.value = true
   const res = await auth.register({
     first_name: form.first_name.trim(),
@@ -233,10 +235,12 @@ async function submit() {
   loading.value = false
 
   if (!res.ok) {
+    logger.Warn('Register.vue', 'submit', 'registration failed', { error: res.message || 'Registration failed.' })
     error.value = res.message || 'Registration failed.'
     return
   }
 
+  logger.Info('Register.vue', 'submit', 'registration successful')
   router.push('/login')
 }
 </script>

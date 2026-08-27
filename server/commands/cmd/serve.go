@@ -21,6 +21,7 @@ import (
 	// our own packages
 	"github.com/JayPonda/Product-catalog/server/docs"
 	controllersv1 "github.com/JayPonda/Product-catalog/server/src/controllers/v1"
+	"github.com/JayPonda/Product-catalog/server/src/middleware"
 	"github.com/JayPonda/Product-catalog/server/src/repositories"
 	routes "github.com/JayPonda/Product-catalog/server/src/routes"
 	"github.com/JayPonda/Product-catalog/server/src/services"
@@ -53,8 +54,15 @@ var serverCmd = &cobra.Command{
 			return ctx.Next()
 		})
 
+		// Correlation ID middleware: generates or propagates X-Request-ID
+		app.Use(middleware.CorrelationID())
+
+		// Request logging middleware: logs method, path, status, duration, payload size
+		app.Use(middleware.RequestLogger(appLogger))
+
 		// Initialize the connection pool singleton by passing your unified configuration structure
 		orm := utils.InitDB(cfg)
+		appLogger.Info("serve.go", "RunE", "database initialized", nil)
 
 		// Inject your pool instance safely into every incoming request scope
 		app.Use(func(ctx fiber.Ctx) error {
@@ -65,32 +73,38 @@ var serverCmd = &cobra.Command{
 		// Initialize repositories
 		productRepo, err := repositories.InitProductRepository(orm, appLogger)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init product repository", nil, err.Error())
 			log.Fatalf("Failed to initialize product repository: %v", err)
 		}
 
 		categoryRepo, err := repositories.InitCategoryRepository(orm, appLogger)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init category repository", nil, err.Error())
 			log.Fatalf("Failed to initialize category repository: %v", err)
 		}
 
 		productCategoryRepo, err := repositories.InitProductCategoryRepository(orm, appLogger)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init product category repository", nil, err.Error())
 			log.Fatalf("Failed to initialize product category repository: %v", err)
 		}
 
 		userRepo, err := repositories.InitUserRepository(orm, appLogger)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init user repository", nil, err.Error())
 			log.Fatalf("Failed to initialize user repository: %v", err)
 		}
 
 		// Initialize services
 		productService, err := services.InitProductService(orm, appLogger, productRepo, categoryRepo, productCategoryRepo)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init product service", nil, err.Error())
 			log.Fatalf("Failed to initialize product service: %v", err)
 		}
 
 		categoryService, err := services.InitCategoryService(appLogger, categoryRepo)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init category service", nil, err.Error())
 			log.Fatalf("Failed to initialize category service: %v", err)
 		}
 
@@ -103,13 +117,16 @@ var serverCmd = &cobra.Command{
 			cfg.GetRefreshTokenTTL(),
 		)
 		if err != nil {
+			appLogger.Error("serve.go", "RunE", "failed to init auth service", nil, err.Error())
 			log.Fatalf("Failed to initialize auth service: %v", err)
 		}
 
+		appLogger.Info("serve.go", "RunE", "all dependencies initialized", nil)
+
 		// Initialize controllers
-		productController := controllersv1.NewProductController(productService)
-		categoryController := controllersv1.NewCategoryController(categoryService)
-		authController := controllersv1.NewAuthController(authService, cfg.GetAppEnv() != "local")
+		productController := controllersv1.NewProductController(productService, appLogger)
+		categoryController := controllersv1.NewCategoryController(categoryService, appLogger)
+		authController := controllersv1.NewAuthController(authService, cfg.GetAppEnv() != "local", appLogger)
 
 		// Register routes
 		routes.RegisterV1Routes(app, productController, categoryController, authController, cfg.GetJWTSecret())
@@ -142,6 +159,8 @@ var serverCmd = &cobra.Command{
 		// let in-flight requests drain within the timeout, then exit cleanly.
 		shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
+
+		appLogger.Info("serve.go", "RunE", "server starting", utils.LoggerMeta{"host": cfg.GetHost(), "port": cfg.GetPort()})
 
 		// Boot up application listener bindings dynamically using structural values
 		return app.Listen(fmt.Sprintf("%s:%s", cfg.GetHost(), cfg.GetPort()), fiber.ListenConfig{

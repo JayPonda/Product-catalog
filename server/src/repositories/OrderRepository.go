@@ -49,6 +49,7 @@ func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exe
 		ScanStructs(&orders)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "ListOrders", "failed to list orders", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
@@ -61,9 +62,11 @@ func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exe
 		ScanVal(&total)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "ListOrders", "failed to count orders", nil, err.Error())
 		return nil, 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug("OrderRepository.go", "ListOrders", "orders listed", utils.LoggerMeta{"count": len(orders), "total": total})
 	return orders, total, nil
 }
 
@@ -97,6 +100,7 @@ func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(start time.Time, en
 		ScanStructs(&orders)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "ListOrdersInRange", "failed to list orders in range", utils.LoggerMeta{"start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339)}, err.Error())
 		return nil, 0, err
 	}
 
@@ -113,9 +117,11 @@ func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(start time.Time, en
 		ScanVal(&total)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "ListOrdersInRange", "failed to count orders in range", nil, err.Error())
 		return nil, 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug("OrderRepository.go", "ListOrdersInRange", "orders listed", utils.LoggerMeta{"count": len(orders), "total": total})
 	return orders, total, nil
 }
 
@@ -133,13 +139,16 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrder(id uuid.UUID, exec ...uti
 	).Executor().Exec()
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "DeleteOrder", "failed to delete order", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
 	if affected, _ := res.RowsAffected(); affected == 0 {
+		orderRepositoryPtr.Logger.Warn("OrderRepository.go", "DeleteOrder", "order not found or already deleted", utils.LoggerMeta{"id": id.String()})
 		return sql.ErrNoRows
 	}
 
+	orderRepositoryPtr.Logger.Debug("OrderRepository.go", "DeleteOrder", "order deleted", utils.LoggerMeta{"id": id.String()})
 	return nil
 }
 
@@ -168,13 +177,16 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrders(ids []uuid.UUID, exec ..
 		Executor().
 		Exec()
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "DeleteOrders", "failed to delete orders", utils.LoggerMeta{"count": len(ids)}, err.Error())
 		return 0, err
 	}
 
 	affected, err := res.RowsAffected()
 	if err != nil {
+		orderRepositoryPtr.Logger.Error("OrderRepository.go", "DeleteOrders", "failed to get rows affected", nil, err.Error())
 		return 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug("OrderRepository.go", "DeleteOrders", "orders deleted", utils.LoggerMeta{"requested": len(ids), "affected": affected})
 	return affected, nil
 }

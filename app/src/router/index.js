@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import logger from '@/utils/logger'
 
 // poll briefly for an anchor that may not exist until the view has rendered
 function waitForElement(selector, timeout = 1000) {
@@ -91,15 +92,14 @@ const router = createRouter({
 // Redirect unauthenticated users away from protected routes.
 let authInitialized = false
 router.beforeEach(async (to) => {
+  logger.Debug('router/index.js', 'beforeEach', `navigating to ${to.path}`, { name: to.name })
+
   const auth = useAuthStore()
-  // ensure we've restored state from the cookie at least once
   if (!authInitialized) {
     await auth.fetchMe()
     authInitialized = true
   }
 
-  // Only the create/edit and my-products routes are protected; the open
-  // products list stays available to everyone.
   const isProtected =
     to.path === '/products/add' ||
     to.path === '/my-products' ||
@@ -107,6 +107,7 @@ router.beforeEach(async (to) => {
     /^\/products\/[^/]+\/edit$/.test(to.path)
 
   if (isProtected && !auth.isAuthenticated) {
+    logger.Warn('router/index.js', 'beforeEach', 'unauthenticated access to protected route', { path: to.path })
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   return true

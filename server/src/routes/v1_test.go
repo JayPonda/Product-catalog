@@ -71,9 +71,9 @@ func newTestApp(t *testing.T) *testApp {
 	app := fiber.New()
 	routes.RegisterV1Routes(
 		app,
-		controllersv1.NewProductController(productSvc),
-		controllersv1.NewCategoryController(categorySvc),
-		controllersv1.NewAuthController(authSvc, false),
+		controllersv1.NewProductController(productSvc, logger),
+		controllersv1.NewCategoryController(categorySvc, logger),
+		controllersv1.NewAuthController(authSvc, false, logger),
 		testJWTSecret,
 	)
 

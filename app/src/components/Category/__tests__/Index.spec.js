@@ -10,6 +10,10 @@ vi.mock('@/network/request.js', () => ({
   createCategory: vi.fn(),
 }))
 
+vi.mock('@/utils/logger', () => ({
+  default: { Debug: vi.fn(), Info: vi.fn(), Warn: vi.fn(), Error: vi.fn() },
+}))
+
 import { getCategories, createCategory } from '@/network/request.js'
 
 describe('Category/Index.vue', () => {
