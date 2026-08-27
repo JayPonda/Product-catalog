@@ -17,7 +17,7 @@ env:
 jobs:
   frontend:
     name: Frontend (lint → test → build)
-    timeout-minutes: 20
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
 
   backend:
     name: Backend (lint → test → build)
-    timeout-minutes: 20
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
