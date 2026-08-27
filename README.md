@@ -350,7 +350,7 @@ All available hook plugins:
 | `no-direct-main.js` | Blocks commits made directly on `main`/`master`; forces work on a feature branch merged via PR | pre-commit |
 | `branch-name.js` | Branch must start with `feature/`, `hotfix/`, `bugfix/`, `release/`, `chore/` or `refactor/` (`main`/`master`/detached HEAD pass) | pre-commit |
 | `gofmt.js` | Fails when changed `.go` files are not gofmt-formatted (check only — run `make format-backend` to fix) | pre-commit, pre-push |
-| `golangci-lint.js` | Runs golangci-lint v1.64.5 over the whole `server/` tree (config: `server/.golangci.yml`) | pre-commit, pre-push |
+| `golangci-lint.js` | Runs golangci-lint v2 over the whole `server/` tree (config: `server/.golangci.yml`) | pre-commit, pre-push |
 | `prettier.js` | Runs `prettier --check` on changed frontend files (run `pnpm --dir app run format` to fix) | pre-commit, pre-push |
 | `eslint-oxlint.js` | Lints changed frontend files: oxlint first (fast), then ESLint (incl. Vue rules) | pre-commit, pre-push |
 | `go-coverage.js` | Runs the full backend test suite with `-coverpkg` and fails below **90%** statement coverage | pre-push |

@@ -1,0 +1,132 @@
+name: CI (PR)
+
+# Runs on PRs into main. The checks only run once the PR is marked
+# "ready for review" — on label add and on every later push while the label is
+# present. Branches without that label are treated as temporary and are skipped.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+    branches: [main]
+
+concurrency:
+  group: ci-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: read
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "11"
+
+jobs:
+  frontend:
+    name: Frontend (lint → test → build)
+    timeout-minutes: 10
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        contains(github.event.pull_request.labels.*.name, 'ready for review')
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+
+      - name: Prettier check
+        working-directory: app
+        run: pnpm exec prettier --check src/
+
+      - name: Frontend lint (oxlint + eslint)
+        working-directory: app
+        run: |
+          pnpm run lint:oxlint
+          pnpm run lint:eslint
+
+      - name: Frontend tests with coverage
+        working-directory: app
+        run: pnpm exec vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text
+
+      - name: Enforce frontend coverage ≥ 90%
+        working-directory: app
+        run: |
+          COV=$(node -e "process.stdout.write(String(require('./coverage/coverage-summary.json').total.statements.pct))")
+          echo "Frontend total coverage: ${COV}%"
+          awk -v c="$COV" 'BEGIN{exit (c+0 >= 90 ? 0 : 1)}' || {
+            echo "Frontend coverage is below the required 90% threshold"; exit 1;
+          }
+
+      - name: Build frontend
+        working-directory: app
+        run: pnpm build
+
+  backend:
+    name: Backend (lint → test → build)
+    timeout-minutes: 10
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        contains(github.event.pull_request.labels.*.name, 'ready for review')
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: server/go.sum
+
+      - name: Check Go formatting
+        working-directory: server
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.1
+          working-directory: server
+          args: ./...
+
+      - name: Backend tests with coverage
+        working-directory: server
+        run: |
+          make coverage
+          echo "Coverage summary:"
+          go tool cover -func=cover.out | tail -1
+
+      - name: Enforce backend coverage ≥ 90%
+        working-directory: server
+        run: |
+          COV=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "Backend total coverage: ${COV}%"
+          awk -v c="$COV" 'BEGIN{exit (c+0 >= 90 ? 0 : 1)}' || {
+            echo "Backend coverage is below the required 90% threshold"; exit 1;
+          }
+
+      - name: Build backend binary
+        working-directory: server
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags="-s -w" -o bin/server .
