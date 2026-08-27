@@ -29,10 +29,12 @@ func InitProductCategoryRepository(
 // GetCategoriesByProduct returns all active category relationships
 // for a product.
 func (repository *ProductCategoryRepository) GetCategoriesByProduct(
+	ctx utils.RequestContext,
 	productID uuid.UUID,
 	exec ...utils.Executor,
 ) ([]models.ProductCategory, error) {
 	var productCategories []models.ProductCategory
+	l := repository.Logger
 
 	db := utils.ResolveExecutor(repository.Db, exec)
 
@@ -53,6 +55,7 @@ func (repository *ProductCategoryRepository) GetCategoriesByProduct(
 		ScanStructs(&productCategories)
 
 	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "GetCategoriesByProduct", "failed to query product categories", utils.LoggerMeta{"product_id": productID.String()}, err.Error())
 		return nil, err
 	}
 
@@ -60,10 +63,12 @@ func (repository *ProductCategoryRepository) GetCategoriesByProduct(
 }
 
 func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
+	ctx utils.RequestContext,
 	productIDs []uuid.UUID,
 	exec ...utils.Executor,
 ) ([]models.ProductCategory, error) {
 	var productCategories []models.ProductCategory
+	l := repository.Logger
 
 	db := utils.ResolveExecutor(repository.Db, exec)
 
@@ -84,6 +89,7 @@ func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
 		ScanStructs(&productCategories)
 
 	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "GetCategoriesByProductIds", "failed to query product categories by product ids", utils.LoggerMeta{"count": len(productIDs)}, err.Error())
 		return nil, err
 	}
 
@@ -93,11 +99,13 @@ func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
 // GetProductCategory returns the link row for a product-category pair,
 // regardless of whether it is currently active.
 func (repository *ProductCategoryRepository) GetProductCategory(
+	ctx utils.RequestContext,
 	productID uuid.UUID,
 	categoryID uuid.UUID,
 	exec ...utils.Executor,
 ) (models.ProductCategory, bool, error) {
 	var productCategory models.ProductCategory
+	l := repository.Logger
 
 	db := utils.ResolveExecutor(repository.Db, exec)
 
@@ -117,8 +125,13 @@ func (repository *ProductCategoryRepository) GetProductCategory(
 		).
 		ScanStruct(&productCategory)
 
-	if err != nil || !found {
+	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "GetProductCategory", "failed to query product category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return models.ProductCategory{}, false, err
+	}
+
+	if !found {
+		return models.ProductCategory{}, false, nil
 	}
 
 	return productCategory, true, nil
@@ -127,14 +140,18 @@ func (repository *ProductCategoryRepository) GetProductCategory(
 // LinkCategory creates a product-category relationship.
 // A previously soft-deleted relationship is reactivated.
 func (repository *ProductCategoryRepository) LinkCategory(
+	ctx utils.RequestContext,
 	productID uuid.UUID,
 	categoryID uuid.UUID,
 	exec ...utils.Executor,
 ) error {
+	l := repository.Logger
+
 	db := utils.ResolveExecutor(repository.Db, exec)
 
-	existing, found, err := repository.GetProductCategory(productID, categoryID, exec...)
+	existing, found, err := repository.GetProductCategory(ctx, productID, categoryID, exec...)
 	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "LinkCategory", "failed to check existing product category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
 		return err
 	}
 
@@ -151,12 +168,18 @@ func (repository *ProductCategoryRepository) LinkCategory(
 				Where(goqu.C("id").Eq(existing.ID)).
 				Executor().
 				Exec()
+			if err != nil {
+				l.Error(ctx, "ProductCategoryRepository.go", "LinkCategory", "failed to reactivate product category link", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
+				return err
+			}
+			l.Debug(ctx, "ProductCategoryRepository.go", "LinkCategory", "product category link reactivated", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
 		}
-		return err
+		return nil
 	}
 
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "LinkCategory", "failed to generate UUID", nil, err.Error())
 		return err
 	}
 
@@ -172,15 +195,24 @@ func (repository *ProductCategoryRepository) LinkCategory(
 		Executor().
 		Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "LinkCategory", "failed to insert product category link", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "ProductCategoryRepository.go", "LinkCategory", "product category link created", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
+	return nil
 }
 
 // UnlinkCategory soft deletes an active product-category relationship.
 func (repository *ProductCategoryRepository) UnlinkCategory(
+	ctx utils.RequestContext,
 	productID uuid.UUID,
 	categoryID uuid.UUID,
 	exec ...utils.Executor,
 ) error {
+	l := repository.Logger
+
 	db := utils.ResolveExecutor(repository.Db, exec)
 
 	_, err := db.
@@ -198,15 +230,24 @@ func (repository *ProductCategoryRepository) UnlinkCategory(
 		Executor().
 		Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "UnlinkCategory", "failed to unlink product category", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "ProductCategoryRepository.go", "UnlinkCategory", "product category unlinked", utils.LoggerMeta{"product_id": productID.String(), "category_id": categoryID.String()})
+	return nil
 }
 
 // DeleteProductCategories soft deletes all category relationships
 // belonging to a product.
 func (repository *ProductCategoryRepository) DeleteProductCategories(
+	ctx utils.RequestContext,
 	productID uuid.UUID,
 	exec ...utils.Executor,
 ) error {
+	l := repository.Logger
+
 	db := utils.ResolveExecutor(repository.Db, exec)
 
 	_, err := db.
@@ -223,5 +264,11 @@ func (repository *ProductCategoryRepository) DeleteProductCategories(
 		Executor().
 		Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "ProductCategoryRepository.go", "DeleteProductCategories", "failed to delete product categories", utils.LoggerMeta{"product_id": productID.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "ProductCategoryRepository.go", "DeleteProductCategories", "product categories deleted", utils.LoggerMeta{"product_id": productID.String()})
+	return nil
 }

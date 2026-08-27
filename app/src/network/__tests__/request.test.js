@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/utils/logger', () => ({
+  default: { Debug: vi.fn(), Info: vi.fn(), Warn: vi.fn(), Error: vi.fn() },
+}))
+
 import {
   getCategories,
   getProducts,
@@ -24,6 +29,7 @@ function jsonResponse(body, status = 200) {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+    headers: new Map(),
   }
 }
 
@@ -123,7 +129,7 @@ describe('network/request', () => {
     })
 
     it('deleteProduct DELETEs and needs no JSON parse', async () => {
-      fetchMock.mockResolvedValue({ ok: true, status: 204 })
+      fetchMock.mockResolvedValue({ ok: true, status: 204, headers: new Map() })
 
       const res = await deleteProduct('p9')
 
@@ -148,7 +154,7 @@ describe('network/request', () => {
       ['linkCategory', linkCategory, 'link', 'Category linked successfully'],
       ['unlinkCategory', unlinkCategory, 'unlink', 'Category unlinked successfully'],
     ])('%s POSTs category_id to the %s route', async (_name, fn, segment, msg) => {
-      fetchMock.mockResolvedValue({ ok: true, status: 200 })
+      fetchMock.mockResolvedValue({ ok: true, status: 200, headers: new Map() })
 
       const res = await fn('p1', 'c1')
 
@@ -185,6 +191,7 @@ describe('network/request', () => {
       fetchMock.mockResolvedValue({
         ok: false,
         status: 401,
+        headers: new Map(),
         json: async () => {
           throw new Error('no json')
         },
@@ -197,7 +204,7 @@ describe('network/request', () => {
     })
 
     it('logoutUser POSTs without a body', async () => {
-      fetchMock.mockResolvedValue({ ok: true, status: 204 })
+      fetchMock.mockResolvedValue({ ok: true, status: 204, headers: new Map() })
 
       const res = await logoutUser()
 

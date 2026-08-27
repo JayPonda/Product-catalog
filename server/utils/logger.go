@@ -1,106 +1,112 @@
 package utils
 
 import (
-	"context"
-	"log/slog"
-	"os"
+	"fmt"
+	"strings"
 	"sync"
-
-	"github.com/gofiber/fiber/v3"
+	"time"
 )
 
-// 1. Core type definitions
 type Primitive interface {
 	int | float64 | string | bool
 }
 
 type LoggerMeta = map[string]any
 
-type Logger interface {
-	Debug(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta)
-	Info(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta)
-	Warn(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta)
-	Error(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta, trace string)
+// RequestContext abstracts request-scoped data (correlation ID, user ID, etc.).
+// fiber.Ctx already satisfies this via its Locals method.
+type RequestContext interface {
+	Locals(key any, value ...any) any
 }
 
-// 2. Struct implementing the Logger interface
-type StructuredLogger struct {
-	logger *slog.Logger
+// CLIContext implements RequestContext for non-HTTP contexts (CLI commands).
+type CLIContext struct {
+	locals map[string]any
 }
+
+func NewCLIContext() *CLIContext {
+	return &CLIContext{locals: make(map[string]any)}
+}
+
+func (c *CLIContext) Locals(key any, value ...any) any {
+	if len(value) > 0 {
+		c.locals[key.(string)] = value[0]
+	}
+	return c.locals[key.(string)]
+}
+
+type Logger interface {
+	Debug(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Info(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Warn(ctx RequestContext, file, method, message string, meta LoggerMeta)
+	Error(ctx RequestContext, file, method, message string, meta LoggerMeta, trace string)
+}
+
+type StructuredLogger struct{}
 
 var (
 	singleTonLogger *StructuredLogger
-	loggerOnce      sync.Once // Ensures thread-safe, one-time execution
+	loggerOnce      sync.Once
 )
 
-// NewStructuredLogger initializes a structured JSON logger safely using sync.Once
 func NewStructuredLogger() *StructuredLogger {
 	loggerOnce.Do(func() {
-		singleTonLogger = &StructuredLogger{
-			logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})),
-		}
+		singleTonLogger = &StructuredLogger{}
 	})
-
 	return singleTonLogger
 }
 
-// 3. Interface Method Implementations
-
-func (l *StructuredLogger) Debug(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta) {
-	l.logWithLevel(ctx, slog.LevelDebug, source, identifier, message, meta, "")
+func (l *StructuredLogger) Debug(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "DEBUG", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Info(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta) {
-	l.logWithLevel(ctx, slog.LevelInfo, source, identifier, message, meta, "")
+func (l *StructuredLogger) Info(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "INFO", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Warn(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta) {
-	l.logWithLevel(ctx, slog.LevelWarn, source, identifier, message, meta, "")
+func (l *StructuredLogger) Warn(ctx RequestContext, file, method, message string, meta LoggerMeta) {
+	l.logWithLevel(getCorrelationID(ctx), "WARN", file, method, message, meta, "")
 }
 
-func (l *StructuredLogger) Error(ctx fiber.Ctx, source, identifier, message string, meta LoggerMeta, trace string) {
-	l.logWithLevel(ctx, slog.LevelError, source, identifier, message, meta, trace)
+func (l *StructuredLogger) Error(ctx RequestContext, file, method, message string, meta LoggerMeta, trace string) {
+	l.logWithLevel(getCorrelationID(ctx), "ERROR", file, method, message, meta, trace)
 }
 
-// Helper method to eliminate duplicate boilerplate code across log calls
-func (l *StructuredLogger) logWithLevel(ctx fiber.Ctx, level slog.Level, source, identifier, message string, meta LoggerMeta, trace string) {
-	var goCtx context.Context
-	if ctx != nil {
-		goCtx = ctx
-	} else {
-		goCtx = context.Background()
-	}
+func (l *StructuredLogger) logWithLevel(correlationID, level, file, method, message string, meta LoggerMeta, trace string) {
+	ts := time.Now().Format("2006-01-02T15:04:05.000Z")
 
-	args := []any{
-		slog.String("source", source),
-		slog.String("identifier", identifier),
-	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("[%s] [%s] %s %s.%s %s", ts, correlationID, level, file, method, message))
 
 	if len(meta) > 0 {
-		metaArgs := make([]any, 0, len(meta)*2)
+		pairs := make([]string, 0, len(meta))
 		for k, v := range meta {
-			metaArgs = append(metaArgs, k, v)
+			pairs = append(pairs, fmt.Sprintf("%s=%v", k, v))
 		}
-		args = append(args, slog.Group("meta", metaArgs...))
+		sb.WriteString(fmt.Sprintf(" %s", strings.Join(pairs, " ")))
 	}
 
 	if trace != "" {
-		args = append(args, slog.String("trace", trace))
+		sb.WriteString(fmt.Sprintf(" trace=%s", trace))
 	}
 
-	l.logger.Log(goCtx, level, message, args...)
+	fmt.Println(sb.String())
 }
 
-// 4. Thread-Safe Dependency Injection Setup
-const LoggerContextKey = "app_logger"
+const (
+	CorrelationIDKey = "correlation_id"
+	LoggerContextKey = "app_logger"
+)
 
-func getLogger(ctx fiber.Ctx) Logger {
+func getCorrelationID(ctx RequestContext) string {
 	if ctx != nil {
-		if logger, ok := ctx.Locals(LoggerContextKey).(Logger); ok {
-			return logger
+		if id, ok := ctx.Locals(CorrelationIDKey).(string); ok {
+			return id
 		}
 	}
-	return NewStructuredLogger()
+	return "-"
+}
+
+func GetCorrelationID(ctx RequestContext) string {
+	return getCorrelationID(ctx)
 }

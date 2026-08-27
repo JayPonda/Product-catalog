@@ -244,7 +244,7 @@ type stubStore struct {
 	rolledBack   bool
 }
 
-func (s *stubStore) InTx(fn func(tx *goqu.TxDatabase) error) error {
+func (s *stubStore) InTx(ctx utils.RequestContext, fn func(tx *goqu.TxDatabase) error) error {
 	s.txs++
 	if err := fn(nil); err != nil { // tx handle is unused by this stub
 		s.rolledBack = true
@@ -254,7 +254,7 @@ func (s *stubStore) InTx(fn func(tx *goqu.TxDatabase) error) error {
 	return nil
 }
 
-func (s *stubStore) ListOrdersInRangeTx(tx *goqu.TxDatabase, start time.Time, end time.Time, limit int, offset int) (v1.ListOrdersResponse, error) {
+func (s *stubStore) ListOrdersInRangeTx(ctx utils.RequestContext, tx *goqu.TxDatabase, start time.Time, end time.Time, limit int, offset int) (v1.ListOrdersResponse, error) {
 	var resp v1.ListOrdersResponse
 	if s.scanErrAfter > 0 && s.pagesServed >= s.scanErrAfter {
 		s.pagesServed++
@@ -273,7 +273,7 @@ func (s *stubStore) ListOrdersInRangeTx(tx *goqu.TxDatabase, start time.Time, en
 	return resp, nil
 }
 
-func (s *stubStore) RemoveOrdersTx(tx *goqu.TxDatabase, ids []uuid.UUID) (int64, error) {
+func (s *stubStore) RemoveOrdersTx(ctx utils.RequestContext, tx *goqu.TxDatabase, ids []uuid.UUID) (int64, error) {
 	s.removeCalls++
 	if s.removeErr != nil {
 		return 0, s.removeErr
@@ -291,7 +291,7 @@ func TestProcessDedupChunk_RemovesEarlierDuplicates_E2E(t *testing.T) {
 	o2 := seedOrderRow(t, svc.Db, custA, 42.00, base.Add(time.Minute))
 	solo := seedOrderRow(t, svc.Db, uuid.NewString(), 7.00, base.Add(30*time.Minute))
 
-	res := ProcessDedupChunk(base.Add(-time.Hour), base.Add(time.Hour), svc, getDedupConfig(false, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
+	res := ProcessDedupChunk(nil, base.Add(-time.Hour), base.Add(time.Hour), svc, getDedupConfig(false, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
 
 	if res.err != nil {
 		t.Fatalf("ProcessDedupChunk returned error: %v", res.err)
@@ -323,7 +323,7 @@ func TestProcessDedupChunk_DryRunLeavesRowsIntact_E2E(t *testing.T) {
 	o1 := seedOrderRow(t, svc.Db, custA, 42.00, base)
 	seedOrderRow(t, svc.Db, custA, 42.00, base.Add(time.Minute))
 
-	res := ProcessDedupChunk(base.Add(-time.Hour), base.Add(time.Hour), svc, getDedupConfig(true, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
+	res := ProcessDedupChunk(nil, base.Add(-time.Hour), base.Add(time.Hour), svc, getDedupConfig(true, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
 
 	if res.err != nil {
 		t.Fatalf("ProcessDedupChunk returned error: %v", res.err)
@@ -352,7 +352,7 @@ func TestProcessDedupChunk_ScanFailureAbortsBeforeAnyDelete(t *testing.T) {
 		})
 	}
 
-	res := ProcessDedupChunk(base.Add(-time.Hour), base.Add(time.Hour), store, getDedupConfig(false, 5*time.Minute, time.Hour, 2), utils.NewStructuredLogger())
+	res := ProcessDedupChunk(nil, base.Add(-time.Hour), base.Add(time.Hour), store, getDedupConfig(false, 5*time.Minute, time.Hour, 2), utils.NewStructuredLogger())
 
 	if res.err == nil {
 		t.Fatal("expected mid-scan failure to surface as chunk error")
@@ -375,7 +375,7 @@ func TestProcessDedupChunk_RemoveFailureRollsBackChunk(t *testing.T) {
 		models.Order{ID: uuid.New(), CustomerID: cust, TotalBill: 10, CreatedAt: base.Add(time.Minute)},
 	)
 
-	res := ProcessDedupChunk(base.Add(-time.Hour), base.Add(time.Hour), store, getDedupConfig(false, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
+	res := ProcessDedupChunk(nil, base.Add(-time.Hour), base.Add(time.Hour), store, getDedupConfig(false, 5*time.Minute, time.Hour, 100), utils.NewStructuredLogger())
 
 	if res.err == nil {
 		t.Fatal("expected delete failure to surface as chunk error")
@@ -412,7 +412,7 @@ func TestRunDedupOrdersRemove_MultiChunkIdempotentRerun_E2E(t *testing.T) {
 	s1 := seedOrderRow(t, svc.Db, uuid.NewString(), 5.00, base.Add(10*time.Minute))
 	s2 := seedOrderRow(t, svc.Db, uuid.NewString(), 7.00, base.Add(60*time.Minute))
 
-	if err := RunDedupOrdersRemove(start, end, svc, getDedupConfig(false, nearby, window, 100), utils.NewStructuredLogger()); err != nil {
+	if err := RunDedupOrdersRemove(nil, start, end, svc, getDedupConfig(false, nearby, window, 100), utils.NewStructuredLogger()); err != nil {
 		t.Fatalf("run 1: %v", err)
 	}
 
@@ -435,7 +435,7 @@ func TestRunDedupOrdersRemove_MultiChunkIdempotentRerun_E2E(t *testing.T) {
 		t.Errorf("earlier duplicates bFirst(%s)/d1(%s) must be gone", bFirst, d1)
 	}
 
-	if err := RunDedupOrdersRemove(start, end, svc, getDedupConfig(false, nearby, window, 100), utils.NewStructuredLogger()); err != nil {
+	if err := RunDedupOrdersRemove(nil, start, end, svc, getDedupConfig(false, nearby, window, 100), utils.NewStructuredLogger()); err != nil {
 		t.Fatalf("run 2: %v", err)
 	}
 	if again := aliveOrderIDs(t, svc.Db); len(again) != len(wantAlive) {

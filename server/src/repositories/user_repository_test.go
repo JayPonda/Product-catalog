@@ -34,7 +34,7 @@ func mkUser(name string) models.User {
 func TestUserRepo_CreateAndGet_E2E(t *testing.T) {
 	repo := newUserRepo(t)
 
-	created, err := repo.CreateUser(mkUser("alice"))
+	created, err := repo.CreateUser(nil, mkUser("alice"))
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestUserRepo_CreateAndGet_E2E(t *testing.T) {
 		t.Error("expected DB-side created_at default to populate")
 	}
 
-	byEmail, err := repo.GetUserByEmail("alice@example.com")
+	byEmail, err := repo.GetUserByEmail(nil, "alice@example.com")
 	if err != nil {
 		t.Fatalf("GetUserByEmail: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestUserRepo_CreateAndGet_E2E(t *testing.T) {
 		t.Error("expected password hash to be selected")
 	}
 
-	byID, err := repo.GetUserById(created.ID)
+	byID, err := repo.GetUserById(nil, created.ID)
 	if err != nil {
 		t.Fatalf("GetUserById: %v", err)
 	}
@@ -67,36 +67,36 @@ func TestUserRepo_CreateAndGet_E2E(t *testing.T) {
 
 func TestUserRepo_GetUserByEmail_NotFound_E2E(t *testing.T) {
 	repo := newUserRepo(t)
-	if _, err := repo.GetUserByEmail("ghost@example.com"); err != sql.ErrNoRows {
+	if _, err := repo.GetUserByEmail(nil, "ghost@example.com"); err != sql.ErrNoRows {
 		t.Errorf("expected ErrNoRows, got %v", err)
 	}
 }
 
 func TestUserRepo_SoftDelete_HidesUser_E2E(t *testing.T) {
 	repo := newUserRepo(t)
-	created, err := repo.CreateUser(mkUser("bob"))
+	created, err := repo.CreateUser(nil, mkUser("bob"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := repo.SoftDeleteUser(created.ID); err != nil {
+	if err := repo.SoftDeleteUser(nil, created.ID); err != nil {
 		t.Fatalf("SoftDeleteUser: %v", err)
 	}
-	if _, err := repo.GetUserById(created.ID); err != sql.ErrNoRows {
+	if _, err := repo.GetUserById(nil, created.ID); err != sql.ErrNoRows {
 		t.Errorf("soft-deleted user should be invisible, got %v", err)
 	}
 }
 
 func TestUserRepo_RefreshTokenLifecycle_E2E(t *testing.T) {
 	repo := newUserRepo(t)
-	user, err := repo.CreateUser(mkUser("carol"))
+	user, err := repo.CreateUser(nil, mkUser("carol"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	hash := "abc123hash"
 	future := time.Now().Add(24 * time.Hour).UTC()
-	if err := repo.CreateRefreshToken(models.RefreshToken{
+	if err := repo.CreateRefreshToken(nil, models.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: hash,
 		ExpiresAt: future,
@@ -104,7 +104,7 @@ func TestUserRepo_RefreshTokenLifecycle_E2E(t *testing.T) {
 		t.Fatalf("CreateRefreshToken: %v", err)
 	}
 
-	got, err := repo.GetRefreshTokenByHash(hash)
+	got, err := repo.GetRefreshTokenByHash(nil, hash)
 	if err != nil {
 		t.Fatalf("GetRefreshTokenByHash: %v", err)
 	}
@@ -120,22 +120,22 @@ func TestUserRepo_RefreshTokenLifecycle_E2E(t *testing.T) {
 
 	// Expired tokens must not be returned.
 	expired := "expiredhash"
-	if err := repo.CreateRefreshToken(models.RefreshToken{
+	if err := repo.CreateRefreshToken(nil, models.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: expired,
 		ExpiresAt: time.Now().Add(-time.Hour).UTC(),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.GetRefreshTokenByHash(expired); err != sql.ErrNoRows {
+	if _, err := repo.GetRefreshTokenByHash(nil, expired); err != sql.ErrNoRows {
 		t.Errorf("expected ErrNoRows for expired token, got %v", err)
 	}
 
 	// Revoke-all for the user.
-	if err := repo.DeleteRefreshTokensByUser(user.ID); err != nil {
+	if err := repo.DeleteRefreshTokensByUser(nil, user.ID); err != nil {
 		t.Fatalf("DeleteRefreshTokensByUser: %v", err)
 	}
-	if _, err := repo.GetRefreshTokenByHash(hash); err != sql.ErrNoRows {
+	if _, err := repo.GetRefreshTokenByHash(nil, hash); err != sql.ErrNoRows {
 		t.Errorf("expected ErrNoRows after revoke-all, got %v", err)
 	}
 }

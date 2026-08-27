@@ -104,6 +104,7 @@ import { getProducts, getMyProducts, deleteProduct } from '@/network/request.js'
 import { useErrorStore } from '@/stores/errors'
 import { EllipsisVertical } from '@lucide/vue'
 import BaseTable from '@/components/table/BaseTable.vue'
+import logger from '@/utils/logger'
 
 const props = defineProps({
   showControls: { type: Boolean, default: false },
@@ -161,11 +162,14 @@ function editProduct(product) {
 }
 
 async function removeProduct(product) {
-  console.log('delete product', product.id)
+  logger.Debug('Product/Index.vue', 'removeProduct', 'deleting product', { id: product.id })
   openMenuId.value = null
 
   const response = await deleteProduct(product.id)
-  console.log(response.ok, response.data)
+  logger.Debug('Product/Index.vue', 'removeProduct', 'delete response', {
+    ok: response.ok,
+    data: response.data,
+  })
   if (response.ok) {
     fetchProducts()
   }
@@ -175,11 +179,14 @@ async function removeProduct(product) {
 async function fetchProducts() {
   const fetchFn = props.myProducts ? getMyProducts : getProducts
   const response = await fetchFn(curruntPage.value, curruntLimit)
-  console.log(response.ok, response.data)
+  logger.Debug('Product/Index.vue', 'fetchProducts', 'fetch response', {
+    ok: response.ok,
+    data: response.data,
+  })
   if (response.ok) {
     if (response.data?.products.length > 0) {
       const keys = Object.keys(response.data?.products[0])
-      console.log(keys)
+      logger.Debug('Product/Index.vue', 'fetchProducts', 'column keys', { keys })
       productTableTitle.value = keys
     }
 

@@ -25,8 +25,9 @@ func InitUserRepository(db *goqu.Database, logger *utils.StructuredLogger) (*Use
 	}, nil
 }
 
-func (userRepositoryPtr *UserRepository) GetUserByEmail(email string, exec ...utils.Executor) (models.User, error) {
+func (userRepositoryPtr *UserRepository) GetUserByEmail(ctx utils.RequestContext, email string, exec ...utils.Executor) (models.User, error) {
 	var user models.User
+	l := userRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
@@ -49,18 +50,21 @@ func (userRepositoryPtr *UserRepository) GetUserByEmail(email string, exec ...ut
 		ScanStruct(&user)
 
 	if err != nil {
+		l.Error(ctx, "UserRepository.go", "GetUserByEmail", "failed to query user by email", utils.LoggerMeta{"email": email}, err.Error())
 		return user, err
 	}
 
 	if !found {
+		l.Warn(ctx, "UserRepository.go", "GetUserByEmail", "user not found by email", utils.LoggerMeta{"email": email})
 		return user, sql.ErrNoRows
 	}
 
 	return user, nil
 }
 
-func (userRepositoryPtr *UserRepository) GetUserById(id uuid.UUID, exec ...utils.Executor) (models.User, error) {
+func (userRepositoryPtr *UserRepository) GetUserById(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) (models.User, error) {
 	var user models.User
+	l := userRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
@@ -83,19 +87,24 @@ func (userRepositoryPtr *UserRepository) GetUserById(id uuid.UUID, exec ...utils
 		ScanStruct(&user)
 
 	if err != nil {
+		l.Error(ctx, "UserRepository.go", "GetUserById", "failed to query user by id", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return user, err
 	}
 
 	if !found {
+		l.Warn(ctx, "UserRepository.go", "GetUserById", "user not found by id", utils.LoggerMeta{"id": id.String()})
 		return user, sql.ErrNoRows
 	}
 
 	return user, nil
 }
 
-func (userRepositoryPtr *UserRepository) CreateUser(user models.User, exec ...utils.Executor) (models.User, error) {
+func (userRepositoryPtr *UserRepository) CreateUser(ctx utils.RequestContext, user models.User, exec ...utils.Executor) (models.User, error) {
+	l := userRepositoryPtr.Logger
+
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error(ctx, "UserRepository.go", "CreateUser", "failed to generate UUID", nil, err.Error())
 		return user, err
 	}
 
@@ -112,13 +121,23 @@ func (userRepositoryPtr *UserRepository) CreateUser(user models.User, exec ...ut
 	).Executor().Exec()
 
 	if err != nil {
+		l.Error(ctx, "UserRepository.go", "CreateUser", "failed to insert user", utils.LoggerMeta{"email": user.Email}, err.Error())
 		return user, err
 	}
 
-	return userRepositoryPtr.GetUserById(id, exec...)
+	created, err := userRepositoryPtr.GetUserById(ctx, id, exec...)
+	if err != nil {
+		l.Error(ctx, "UserRepository.go", "CreateUser", "failed to retrieve created user", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return user, err
+	}
+
+	l.Debug(ctx, "UserRepository.go", "CreateUser", "user created", utils.LoggerMeta{"id": id.String(), "email": user.Email})
+	return created, nil
 }
 
-func (userRepositoryPtr *UserRepository) SoftDeleteUser(id uuid.UUID, exec ...utils.Executor) error {
+func (userRepositoryPtr *UserRepository) SoftDeleteUser(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) error {
+	l := userRepositoryPtr.Logger
+
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
 	_, err := db.Update(USER_DB).Set(
@@ -130,12 +149,21 @@ func (userRepositoryPtr *UserRepository) SoftDeleteUser(id uuid.UUID, exec ...ut
 		goqu.C("deleted_at").IsNull(),
 	).Executor().Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "UserRepository.go", "SoftDeleteUser", "failed to soft delete user", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "UserRepository.go", "SoftDeleteUser", "user soft deleted", utils.LoggerMeta{"id": id.String()})
+	return nil
 }
 
-func (userRepositoryPtr *UserRepository) CreateRefreshToken(token models.RefreshToken, exec ...utils.Executor) error {
+func (userRepositoryPtr *UserRepository) CreateRefreshToken(ctx utils.RequestContext, token models.RefreshToken, exec ...utils.Executor) error {
+	l := userRepositoryPtr.Logger
+
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error(ctx, "UserRepository.go", "CreateRefreshToken", "failed to generate UUID", nil, err.Error())
 		return err
 	}
 
@@ -150,10 +178,16 @@ func (userRepositoryPtr *UserRepository) CreateRefreshToken(token models.Refresh
 		},
 	).Executor().Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "UserRepository.go", "CreateRefreshToken", "failed to insert refresh token", utils.LoggerMeta{"user_id": token.UserID.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "UserRepository.go", "CreateRefreshToken", "refresh token created", utils.LoggerMeta{"user_id": token.UserID.String()})
+	return nil
 }
 
-func (userRepositoryPtr *UserRepository) GetRefreshTokenByHash(tokenHash string, exec ...utils.Executor) (models.RefreshToken, error) {
+func (userRepositoryPtr *UserRepository) GetRefreshTokenByHash(ctx utils.RequestContext, tokenHash string, exec ...utils.Executor) (models.RefreshToken, error) {
 	var token models.RefreshToken
 
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
@@ -184,7 +218,7 @@ func (userRepositoryPtr *UserRepository) GetRefreshTokenByHash(tokenHash string,
 	return token, nil
 }
 
-func (userRepositoryPtr *UserRepository) DeleteRefreshTokensByUser(userID uuid.UUID, exec ...utils.Executor) error {
+func (userRepositoryPtr *UserRepository) DeleteRefreshTokensByUser(ctx utils.RequestContext, userID uuid.UUID, exec ...utils.Executor) error {
 	db := utils.ResolveExecutor(userRepositoryPtr.Db, exec)
 
 	_, err := db.Delete(REFRESH_DB).

@@ -27,7 +27,7 @@ func InitOrderRepository(db *goqu.Database, logger *utils.StructuredLogger) (*Or
 
 // ListOrders returns orders ordered newest-first with pagination. Soft-deleted
 // orders (deleted_at IS NOT NULL) are excluded.
-func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exec ...utils.Executor) ([]models.Order, int64, error) {
+func (orderRepositoryPtr *OrderRepository) ListOrders(ctx utils.RequestContext, limit int, offset int, exec ...utils.Executor) ([]models.Order, int64, error) {
 	db := utils.ResolveExecutor(orderRepositoryPtr.Db, exec)
 
 	var orders []models.Order
@@ -49,6 +49,7 @@ func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exe
 		ScanStructs(&orders)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "ListOrders", "failed to list orders", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
@@ -61,9 +62,11 @@ func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exe
 		ScanVal(&total)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "ListOrders", "failed to count orders", nil, err.Error())
 		return nil, 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug(ctx, "OrderRepository.go", "ListOrders", "orders listed", utils.LoggerMeta{"count": len(orders), "total": total})
 	return orders, total, nil
 }
 
@@ -71,7 +74,7 @@ func (orderRepositoryPtr *OrderRepository) ListOrders(limit int, offset int, exe
 // ordered by created_at ASC, with pagination. Soft-deleted orders
 // (deleted_at IS NOT NULL) are excluded. ASC ordering keeps time-proximity
 // clustering simple for the dedup job.
-func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(start time.Time, end time.Time, limit int, offset int, exec ...utils.Executor) ([]models.Order, int64, error) {
+func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(ctx utils.RequestContext, start time.Time, end time.Time, limit int, offset int, exec ...utils.Executor) ([]models.Order, int64, error) {
 	db := utils.ResolveExecutor(orderRepositoryPtr.Db, exec)
 
 	var orders []models.Order
@@ -97,6 +100,7 @@ func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(start time.Time, en
 		ScanStructs(&orders)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "ListOrdersInRange", "failed to list orders in range", utils.LoggerMeta{"start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339)}, err.Error())
 		return nil, 0, err
 	}
 
@@ -113,14 +117,16 @@ func (orderRepositoryPtr *OrderRepository) ListOrdersInRange(start time.Time, en
 		ScanVal(&total)
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "ListOrdersInRange", "failed to count orders in range", nil, err.Error())
 		return nil, 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug(ctx, "OrderRepository.go", "ListOrdersInRange", "orders listed", utils.LoggerMeta{"count": len(orders), "total": total})
 	return orders, total, nil
 }
 
 // DeleteOrder soft-deletes an order by setting deleted_at.
-func (orderRepositoryPtr *OrderRepository) DeleteOrder(id uuid.UUID, exec ...utils.Executor) error {
+func (orderRepositoryPtr *OrderRepository) DeleteOrder(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) error {
 	db := utils.ResolveExecutor(orderRepositoryPtr.Db, exec)
 
 	res, err := db.Update(ORDER_DB).Set(
@@ -133,13 +139,16 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrder(id uuid.UUID, exec ...uti
 	).Executor().Exec()
 
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "DeleteOrder", "failed to delete order", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return err
 	}
 
 	if affected, _ := res.RowsAffected(); affected == 0 {
+		orderRepositoryPtr.Logger.Warn(ctx, "OrderRepository.go", "DeleteOrder", "order not found or already deleted", utils.LoggerMeta{"id": id.String()})
 		return sql.ErrNoRows
 	}
 
+	orderRepositoryPtr.Logger.Debug(ctx, "OrderRepository.go", "DeleteOrder", "order deleted", utils.LoggerMeta{"id": id.String()})
 	return nil
 }
 
@@ -147,7 +156,7 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrder(id uuid.UUID, exec ...uti
 // deleted_at. Orders already soft-deleted (deleted_at IS NOT NULL) are skipped.
 // It returns the number of rows actually affected, so callers can report how
 // many duplicates were really removed (idempotent across runs).
-func (orderRepositoryPtr *OrderRepository) DeleteOrders(ids []uuid.UUID, exec ...utils.Executor) (int64, error) {
+func (orderRepositoryPtr *OrderRepository) DeleteOrders(ctx utils.RequestContext, ids []uuid.UUID, exec ...utils.Executor) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
@@ -168,13 +177,16 @@ func (orderRepositoryPtr *OrderRepository) DeleteOrders(ids []uuid.UUID, exec ..
 		Executor().
 		Exec()
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "DeleteOrders", "failed to delete orders", utils.LoggerMeta{"count": len(ids)}, err.Error())
 		return 0, err
 	}
 
 	affected, err := res.RowsAffected()
 	if err != nil {
+		orderRepositoryPtr.Logger.Error(ctx, "OrderRepository.go", "DeleteOrders", "failed to get rows affected", nil, err.Error())
 		return 0, err
 	}
 
+	orderRepositoryPtr.Logger.Debug(ctx, "OrderRepository.go", "DeleteOrders", "orders deleted", utils.LoggerMeta{"requested": len(ids), "affected": affected})
 	return affected, nil
 }

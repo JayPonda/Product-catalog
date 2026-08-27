@@ -52,7 +52,7 @@ func TestOrderRepo_ListOrdersInRange_E2E(t *testing.T) {
 	testdb.SeedOrder(t, repo.Db, uuid.NewString(), custA, 100.0, base.Add(time.Minute))
 	testdb.SeedOrder(t, repo.Db, uuid.NewString(), custB, 200.0, base.Add(10*time.Minute))
 
-	orders, total, err := repo.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	orders, total, err := repo.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestOrderRepo_ListOrdersInRange_E2E(t *testing.T) {
 	}
 
 	// Range that excludes custA's two orders (kept >5m away from them).
-	orders2, total2, err := repo.ListOrdersInRange(base.Add(5*time.Minute), base.Add(time.Hour), 100, 0)
+	orders2, total2, err := repo.ListOrdersInRange(nil, base.Add(5*time.Minute), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestOrderRepo_DeleteOrders_E2E(t *testing.T) {
 	testdb.SeedOrder(t, repo.Db, id1, uuid.NewString(), 1.0, base)
 	testdb.SeedOrder(t, repo.Db, id2, uuid.NewString(), 1.0, base.Add(time.Minute))
 
-	affected, err := repo.DeleteOrders([]uuid.UUID{mustUUID(t, id1), mustUUID(t, id2)})
+	affected, err := repo.DeleteOrders(nil, []uuid.UUID{mustUUID(t, id1), mustUUID(t, id2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestOrderRepo_DeleteOrders_E2E(t *testing.T) {
 		t.Errorf("affected = %d, want 2", affected)
 	}
 
-	orders, total, err := repo.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	orders, total, err := repo.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +104,10 @@ func TestOrderRepo_DeleteOrder_E2E(t *testing.T) {
 	id := uuid.NewString()
 	testdb.SeedOrder(t, repo.Db, id, uuid.NewString(), 1.0, base)
 
-	if err := repo.DeleteOrder(mustUUID(t, id)); err != nil {
+	if err := repo.DeleteOrder(nil, mustUUID(t, id)); err != nil {
 		t.Fatalf("first delete: %v", err)
 	}
-	if err := repo.DeleteOrder(mustUUID(t, id)); err != sql.ErrNoRows {
+	if err := repo.DeleteOrder(nil, mustUUID(t, id)); err != sql.ErrNoRows {
 		t.Errorf("second delete should be ErrNoRows, got %v", err)
 	}
 }
@@ -120,14 +120,14 @@ func TestOrderRepo_ListOrders_Pagination_E2E(t *testing.T) {
 			base.Add(time.Duration(i)*time.Minute))
 	}
 
-	page1, total, err := repo.ListOrders(2, 0)
+	page1, total, err := repo.ListOrders(nil, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 5 || len(page1) != 2 {
 		t.Errorf("page1: total=%d len=%d, want 5/2", total, len(page1))
 	}
-	page2, _, err := repo.ListOrders(2, 2)
+	page2, _, err := repo.ListOrders(nil, 2, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestOrderRepo_ListOrdersInRange_Sqlmock(t *testing.T) {
 	mock.ExpectQuery(`ORDER BY`).WillReturnRows(rows)
 	mock.ExpectQuery(`COUNT`).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
-	orders, total, err := repo.ListOrdersInRange(base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
+	orders, total, err := repo.ListOrdersInRange(nil, base.Add(-time.Hour), base.Add(time.Hour), 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestOrderRepo_DeleteOrders_Sqlmock(t *testing.T) {
 	mock.ExpectExec(`deleted_at`).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 
-	affected, err := repo.DeleteOrders([]uuid.UUID{mustUUID(t, id1), mustUUID(t, id2)})
+	affected, err := repo.DeleteOrders(nil, []uuid.UUID{mustUUID(t, id1), mustUUID(t, id2)})
 	if err != nil {
 		t.Fatal(err)
 	}

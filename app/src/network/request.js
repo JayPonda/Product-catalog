@@ -1,3 +1,5 @@
+import logger from '@/utils/logger'
+
 // Cookie-based auth requires credentials to be sent on every request.
 const DEFAULT_OPTS = {
   credentials: 'include',
@@ -9,32 +11,61 @@ const DEFAULT_OPTS = {
 const V1 = '/api/v1'
 
 function buildUrl(path, params) {
-  // VITE_BACKEND_URL may be empty for same-origin deployments (nginx proxies
-  // /api to the backend); relative URLs resolve against the current origin.
   const finalUrl = new URL(import.meta.env.VITE_BACKEND_URL + V1 + path, window.location.origin)
   finalUrl.search = new URLSearchParams(params).toString()
   return finalUrl.toString()
 }
 
-async function request(path, { params, rawData, defaultError, ...options } = {}) {
+async function request(path, { params, rawData, defaultError, method, ...options } = {}) {
+  const httpMethod = method || 'GET'
+  const url = buildUrl(path, params)
+
+  logger.Debug('request.js', 'request', `${httpMethod} ${path}`, { params })
+
+  const fetchOpts = { ...DEFAULT_OPTS, ...options }
+  if (method) {
+    fetchOpts.method = method
+  }
+
   try {
-    const response = await fetch(buildUrl(path, params), { ...DEFAULT_OPTS, ...options })
+    const response = await fetch(url, fetchOpts)
+    const correlationId = response.headers.get('X-Request-ID')
 
     if (!response.ok) {
       if (defaultError === undefined) {
+        logger.Warn(
+          'request.js',
+          'request',
+          `${httpMethod} ${path} failed`,
+          { status: response.status },
+          correlationId,
+        )
         return { ok: false, error: response.status }
       }
       const body = await response.json().catch(() => ({}))
+      logger.Warn(
+        'request.js',
+        'request',
+        `${httpMethod} ${path} failed`,
+        { status: response.status, message: body.error ?? defaultError },
+        correlationId,
+      )
       return { ok: false, error: response.status, message: body.error ?? defaultError }
     }
 
     if (rawData !== undefined) {
+      logger.Debug('request.js', 'request', `${httpMethod} ${path} success`, { correlationId })
       return { ok: true, data: rawData }
     }
 
-    return { ok: true, data: await response.json() }
+    const data = await response.json()
+    logger.Debug('request.js', 'request', `${httpMethod} ${path} success`, { correlationId })
+    return { ok: true, data }
   } catch (error) {
-    console.error(error)
+    logger.Error('request.js', 'request', `${httpMethod} ${path} error`, {
+      path,
+      error: error.message,
+    })
     return { ok: false, error }
   }
 }

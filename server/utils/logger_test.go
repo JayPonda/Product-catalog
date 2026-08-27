@@ -1,48 +1,44 @@
 package utils
 
 import (
-	"net/http/httptest"
 	"testing"
-
-	"github.com/gofiber/fiber/v3"
 )
 
 func TestStructuredLogger_NoPanicNilCtx(t *testing.T) {
 	l := NewStructuredLogger()
-	// All level methods must accept a nil fiber.Ctx without panicking.
-	l.Debug(nil, "src", "id", "msg", nil)
-	l.Info(nil, "src", "id", "msg", LoggerMeta{"k": "v"})
-	l.Warn(nil, "src", "id", "msg", nil)
-	l.Error(nil, "src", "id", "msg", nil, "trace")
+	l.Debug(nil, "test.go", "TestFunc", "debug message", nil)
+	l.Info(nil, "test.go", "TestFunc", "info message", LoggerMeta{"k": "v"})
+	l.Warn(nil, "test.go", "TestFunc", "warn message", nil)
+	l.Error(nil, "test.go", "TestFunc", "error message", nil, "trace")
 }
 
-func TestGetLoggerFallback(t *testing.T) {
-	l := getLogger(nil)
-	if l == nil {
-		t.Fatal("expected a fallback logger, got nil")
-	}
-	if _, ok := l.(*StructuredLogger); !ok {
-		t.Errorf("expected *StructuredLogger, got %T", l)
-	}
-}
-
-func TestGetLoggerFromCtx(t *testing.T) {
-	app := fiber.New()
-	app.Get("/", func(ctx fiber.Ctx) error {
-		mockLogger := NewStructuredLogger()
-		ctx.Locals(LoggerContextKey, mockLogger)
-
-		l := getLogger(ctx)
-		if l != mockLogger {
-			t.Error("expected injected logger, got different one")
-		}
-		return ctx.SendString("ok")
+func TestStructuredLogger_WithMeta(t *testing.T) {
+	l := NewStructuredLogger()
+	l.Info(nil, "file.go", "Method", "with meta", LoggerMeta{
+		"count": 5,
+		"name":  "test",
+		"ok":    true,
 	})
+}
 
-	req := httptest.NewRequest("GET", "/", nil)
-	res, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("failed to test: %v", err)
+func TestNewStructuredLogger_Singleton(t *testing.T) {
+	l1 := NewStructuredLogger()
+	l2 := NewStructuredLogger()
+	if l1 != l2 {
+		t.Error("expected same singleton instance")
 	}
-	res.Body.Close()
+}
+
+func TestCLIContext_Locals(t *testing.T) {
+	ctx := NewCLIContext()
+	ctx.Locals(CorrelationIDKey, "test-123")
+	if got := GetCorrelationID(ctx); got != "test-123" {
+		t.Errorf("expected test-123, got %s", got)
+	}
+}
+
+func TestCLIContext_NilContext(t *testing.T) {
+	if got := GetCorrelationID(nil); got != "-" {
+		t.Errorf("expected -, got %s", got)
+	}
 }

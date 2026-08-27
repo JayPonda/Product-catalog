@@ -28,8 +28,9 @@ func InitCategoryRepository(
 	}, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID, exec ...utils.Executor) (models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) (models.Category, error) {
 	var category models.Category
+	l := CategoryRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
 
@@ -49,18 +50,21 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(id uuid.UUID, e
 		ScanStruct(&category)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "GetCategoryById", "failed to query category", utils.LoggerMeta{"id": id.String()}, err.Error())
 		return category, err
 	}
 
 	if !found {
+		l.Warn(ctx, "CategoryRepository.go", "GetCategoryById", "category not found", utils.LoggerMeta{"id": id.String()})
 		return category, sql.ErrNoRows
 	}
 
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUID, exec ...utils.Executor) ([]models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ctx utils.RequestContext, ids []uuid.UUID, exec ...utils.Executor) ([]models.Category, error) {
 	var category []models.Category
+	l := CategoryRepositoryPtr.Logger
 
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
 
@@ -80,14 +84,16 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ids []uuid.UUI
 		ScanStructs(&category)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "GetCategoryByIds", "failed to query categories by ids", utils.LoggerMeta{"count": len(ids)}, err.Error())
 		return category, err
 	}
 
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories []string, exec ...utils.Executor) ([]models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(ctx utils.RequestContext, categories []string, exec ...utils.Executor) ([]models.Category, error) {
 	var category []models.Category
+	l := CategoryRepositoryPtr.Logger
 
 	normalized := make([]string, 0, len(categories))
 	for _, name := range categories {
@@ -114,14 +120,16 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(categories [
 		ScanStructs(&category)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "GetCategoryByNames", "failed to query categories by names", utils.LoggerMeta{"count": len(normalized)}, err.Error())
 		return nil, err
 	}
 
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategories(limit int, offset int, exec ...utils.Executor) ([]models.Category, int64, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategories(ctx utils.RequestContext, limit int, offset int, exec ...utils.Executor) ([]models.Category, int64, error) {
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
+	l := CategoryRepositoryPtr.Logger
 
 	var categories []models.Category
 
@@ -143,6 +151,7 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategories(limit int, offset
 		ScanStructs(&categories)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to query categories", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
@@ -157,19 +166,24 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategories(limit int, offset
 		ScanVal(&total)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to count categories", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
 		return nil, 0, err
 	}
 
+	l.Debug(ctx, "CategoryRepository.go", "GetCategories", "categories retrieved", utils.LoggerMeta{"limit": limit, "offset": offset, "count": len(categories), "total": total})
 	return categories, total, nil
 }
 
 func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
+	ctx utils.RequestContext,
 	category models.Category,
 	exec ...utils.Executor,
 ) (models.Category, error) {
+	l := CategoryRepositoryPtr.Logger
 
 	id, err := utils.GetUUID()
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "CreateCategory", "failed to generate UUID", nil, err.Error())
 		return category, err
 	}
 
@@ -187,15 +201,24 @@ func (CategoryRepositoryPtr *CategoryRepository) CreateCategory(
 		Exec()
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "CreateCategory", "failed to insert category", utils.LoggerMeta{"name": category.Name}, err.Error())
 		return category, err
 	}
 
-	return CategoryRepositoryPtr.GetCategoryById(id, exec...)
+	cat, err := CategoryRepositoryPtr.GetCategoryById(ctx, id, exec...)
+	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "CreateCategory", "failed to retrieve created category", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return cat, err
+	}
+
+	l.Debug(ctx, "CategoryRepository.go", "CreateCategory", "category created", utils.LoggerMeta{"id": id.String(), "name": cat.Name})
+	return cat, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) MatchCategoriesByName(prefix string, limit int, exec ...utils.Executor) ([]models.Category, error) {
+func (CategoryRepositoryPtr *CategoryRepository) MatchCategoriesByName(ctx utils.RequestContext, prefix string, limit int, exec ...utils.Executor) ([]models.Category, error) {
 	// initialized (not nil) so zero matches marshal to [] instead of null
 	categories := []models.Category{}
+	l := CategoryRepositoryPtr.Logger
 
 	escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	pattern := escaper.Replace(utils.NormalizeName(prefix)) + "%"
@@ -220,13 +243,16 @@ func (CategoryRepositoryPtr *CategoryRepository) MatchCategoriesByName(prefix st
 		ScanStructs(&categories)
 
 	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "MatchCategoriesByName", "failed to match categories", utils.LoggerMeta{"prefix": prefix, "limit": limit}, err.Error())
 		return nil, err
 	}
 
 	return categories, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(id uuid.UUID, exec ...utils.Executor) error {
+func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(ctx utils.RequestContext, id uuid.UUID, exec ...utils.Executor) error {
+	l := CategoryRepositoryPtr.Logger
+
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
 
 	_, err := db.
@@ -243,5 +269,11 @@ func (CategoryRepositoryPtr *CategoryRepository) DeleteCategory(id uuid.UUID, ex
 		Executor().
 		Exec()
 
-	return err
+	if err != nil {
+		l.Error(ctx, "CategoryRepository.go", "DeleteCategory", "failed to delete category", utils.LoggerMeta{"id": id.String()}, err.Error())
+		return err
+	}
+
+	l.Debug(ctx, "CategoryRepository.go", "DeleteCategory", "category deleted", utils.LoggerMeta{"id": id.String()})
+	return nil
 }

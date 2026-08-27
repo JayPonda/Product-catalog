@@ -25,7 +25,7 @@ func seedCategories(t *testing.T, repo *repositories.CategoryRepository, names .
 	t.Helper()
 	out := make([]models.Category, 0, len(names))
 	for _, n := range names {
-		c, err := repo.CreateCategory(models.Category{Name: n})
+		c, err := repo.CreateCategory(nil, models.Category{Name: n})
 		if err != nil {
 			t.Fatalf("create category %q: %v", n, err)
 		}
@@ -37,7 +37,7 @@ func seedCategories(t *testing.T, repo *repositories.CategoryRepository, names .
 func TestCategoryRepo_Create_NormalizesName_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 
-	created, err := repo.CreateCategory(models.Category{Name: "  Electronics  "})
+	created, err := repo.CreateCategory(nil, models.Category{Name: "  Electronics  "})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,14 +53,14 @@ func TestCategoryRepo_GetById_And_NotFound_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seeded := seedCategories(t, repo, "toys")
 
-	got, err := repo.GetCategoryById(seeded[0].ID)
+	got, err := repo.GetCategoryById(nil, seeded[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Name != "toys" {
 		t.Errorf("expected toys, got %q", got.Name)
 	}
-	if _, err := repo.GetCategoryById(uuid.New()); err != sql.ErrNoRows {
+	if _, err := repo.GetCategoryById(nil, uuid.New()); err != sql.ErrNoRows {
 		t.Errorf("expected ErrNoRows for unknown id, got %v", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestCategoryRepo_GetCategories_Pagination_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seedCategories(t, repo, "alpha", "beta", "gamma", "delta")
 
-	page, total, err := repo.GetCategories(2, 0)
+	page, total, err := repo.GetCategories(nil, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCategoryRepo_GetCategories_Pagination_E2E(t *testing.T) {
 		t.Errorf("expected alpha,beta got %q,%q", page[0].Name, page[1].Name)
 	}
 
-	page2, _, _ := repo.GetCategories(2, 2)
+	page2, _, _ := repo.GetCategories(nil, 2, 2)
 	if len(page2) != 2 || page2[0].Name != "delta" || page2[1].Name != "gamma" {
 		t.Errorf("unexpected page2: %v", page2)
 	}
@@ -91,7 +91,7 @@ func TestCategoryRepo_GetByNames_Normalized_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seedCategories(t, repo, "sports", "outdoor")
 
-	found, err := repo.GetCategoryByNames([]string{"  SPORTS ", "", "outdoor"})
+	found, err := repo.GetCategoryByNames(nil, []string{"  SPORTS ", "", "outdoor"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestCategoryRepo_MatchByNamePrefix_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seedCategories(t, repo, "shoes", "shirts", "shorts", "hats")
 
-	matches, err := repo.MatchCategoriesByName("SH", 10)
+	matches, err := repo.MatchCategoriesByName(nil, "SH", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,12 +121,12 @@ func TestCategoryRepo_MatchByNamePrefix_E2E(t *testing.T) {
 		}
 	}
 
-	limited, _ := repo.MatchCategoriesByName("sh", 2)
+	limited, _ := repo.MatchCategoriesByName(nil, "sh", 2)
 	if len(limited) != 2 {
 		t.Errorf("limit not applied, got %d", len(limited))
 	}
 
-	none, _ := repo.MatchCategoriesByName("zzz", 10)
+	none, _ := repo.MatchCategoriesByName(nil, "zzz", 10)
 	if len(none) != 0 {
 		t.Errorf("expected zero matches, got %d", len(none))
 	}
@@ -136,13 +136,13 @@ func TestCategoryRepo_Delete_HidesCategory_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seeded := seedCategories(t, repo, "temp")
 
-	if err := repo.DeleteCategory(seeded[0].ID); err != nil {
+	if err := repo.DeleteCategory(nil, seeded[0].ID); err != nil {
 		t.Fatalf("DeleteCategory: %v", err)
 	}
-	if _, err := repo.GetCategoryById(seeded[0].ID); err != sql.ErrNoRows {
+	if _, err := repo.GetCategoryById(nil, seeded[0].ID); err != sql.ErrNoRows {
 		t.Errorf("deleted category should be invisible, got %v", err)
 	}
-	_, total, _ := repo.GetCategories(10, 0)
+	_, total, _ := repo.GetCategories(nil, 10, 0)
 	if total != 0 {
 		t.Errorf("deleted category still counted, total=%d", total)
 	}

@@ -71,10 +71,11 @@ func newTestApp(t *testing.T) *testApp {
 	app := fiber.New()
 	routes.RegisterV1Routes(
 		app,
-		controllersv1.NewProductController(productSvc),
-		controllersv1.NewCategoryController(categorySvc),
-		controllersv1.NewAuthController(authSvc, false),
+		controllersv1.NewProductController(productSvc, logger),
+		controllersv1.NewCategoryController(categorySvc, logger),
+		controllersv1.NewAuthController(authSvc, false, logger),
 		testJWTSecret,
+		logger,
 	)
 
 	return &testApp{app: app, authService: authSvc, db: db}
@@ -456,6 +457,13 @@ func TestRoutes_MyProducts_ScopedToOwner_E2E(t *testing.T) {
 	} else {
 		res.Body.Close()
 	}
+
+	// Bad query params → 400
+	if res := ta.do(t, "GET", "/api/v1/my-products?limit=7", nil, alice); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("my-products bad limit: %d, want 400", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
 }
 
 func TestRoutes_Logout_RevokesAndClearsCookies_E2E(t *testing.T) {
@@ -649,4 +657,305 @@ func TestRoutes_ServiceFailures_MapToErrorStatuses_E2E(t *testing.T) {
 			t.Errorf("logout with refresh gone: %d, want 500", res.StatusCode)
 		}
 	})
+}
+
+func TestRoutes_ProductUpdate_ErrorPaths_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "update-err@example.com")
+
+	// Create a product first
+	res := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "ToUpdate", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie)
+	var created struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, res, &created)
+
+	// Update with invalid UUID → 400
+	if res = ta.do(t, "PUT", "/api/v1/products/not-a-uuid", map[string]any{
+		"name": "X", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("update bad uuid: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Update with malformed JSON → 400
+	if res = ta.do(t, "PUT", "/api/v1/products/"+created.ID, json.RawMessage("{oops"), cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("update malformed: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Update with missing name → 400
+	if res = ta.do(t, "PUT", "/api/v1/products/"+created.ID, map[string]any{
+		"name": "", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("update empty name: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Update non-existent product → service error (no ErrProductNotFound mapping in controller)
+	zeroID := "00000000-0000-0000-0000-000000000000"
+	if res = ta.do(t, "PUT", "/api/v1/products/"+zeroID, map[string]any{
+		"name": "X", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie); res.StatusCode != http.StatusInternalServerError {
+		t.Errorf("update non-existent: %d, want 500", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Update with duplicate name → 409
+	res2 := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "ExistingProd", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie)
+	var created2 struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, res2, &created2)
+	if res = ta.do(t, "PUT", "/api/v1/products/"+created.ID, map[string]any{
+		"name": "ExistingProd", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie); res.StatusCode != http.StatusConflict {
+		t.Errorf("update dup name: %d, want 409", res.StatusCode)
+	}
+	res.Body.Close()
+}
+
+func TestRoutes_ProductDelete_ErrorPaths_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "del-err@example.com")
+
+	// Delete with invalid UUID → 400
+	if res := ta.do(t, "DELETE", "/api/v1/products/not-a-uuid", nil, cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("delete bad uuid: %d, want 400", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+}
+
+func TestRoutes_ProductLinkUnlink_ErrorPaths_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "link-err@example.com")
+
+	// Create a product
+	res := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "LinkTest", "description": "d", "price": 100, "stock_quantity": 1,
+	}, cookie)
+	var created struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, res, &created)
+
+	// Link with invalid product UUID → 400
+	if res = ta.do(t, "POST", "/api/v1/products/not-a-uuid/categories/link",
+		map[string]string{"category_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"}, cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("link bad product uuid: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Link with malformed JSON → 400
+	if res = ta.do(t, "POST", "/api/v1/products/"+created.ID+"/categories/link",
+		json.RawMessage("{oops"), cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("link malformed: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Link with non-existent category → 404
+	fakeCatID := "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+	if res = ta.do(t, "POST", "/api/v1/products/"+created.ID+"/categories/link",
+		map[string]string{"category_id": fakeCatID}, cookie); res.StatusCode != http.StatusNotFound {
+		t.Errorf("link non-existent category: %d, want 404", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Unlink with invalid product UUID → 400
+	if res = ta.do(t, "POST", "/api/v1/products/not-a-uuid/categories/unlink",
+		map[string]string{"category_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"}, cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("unlink bad product uuid: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Unlink with malformed JSON → 400
+	if res = ta.do(t, "POST", "/api/v1/products/"+created.ID+"/categories/unlink",
+		json.RawMessage("{oops"), cookie); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("unlink malformed: %d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Unlink with non-existent category → 404
+	if res = ta.do(t, "POST", "/api/v1/products/"+created.ID+"/categories/unlink",
+		map[string]string{"category_id": fakeCatID}, cookie); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unlink non-existent category: %d, want 404", res.StatusCode)
+	}
+	res.Body.Close()
+}
+
+func TestRoutes_ProductGetById_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "getbyid@example.com")
+
+	// Create with categories
+	catRes := ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": "Electronics"}, cookie)
+	var cat struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, catRes, &cat)
+
+	prodRes := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Laptop", "description": "gaming laptop", "price": 99999, "stock_quantity": 10,
+	}, cookie)
+	var prod struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, prodRes, &prod)
+
+	ta.do(t, "POST", "/api/v1/products/"+prod.ID+"/categories/link",
+		map[string]string{"category_id": cat.ID}, cookie)
+
+	// Get by ID → 200 with categories (ResponseProduct embeds Product at top level)
+	var got struct {
+		Name       string `json:"name"`
+		Categories []struct {
+			Name string `json:"name"`
+		} `json:"categories"`
+	}
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products/"+prod.ID, nil, ""), &got)
+	if got.Name != "Laptop" {
+		t.Errorf("get by id: name=%q, want Laptop", got.Name)
+	}
+	if len(got.Categories) != 1 || got.Categories[0].Name != "electronics" {
+		t.Errorf("get by id: categories=%+v", got.Categories)
+	}
+
+	// Get by ID with bad uuid → 400
+	if res := ta.do(t, "GET", "/api/v1/products/not-a-uuid", nil, ""); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("get by bad id: %d, want 400", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+
+	// Get by ID not found → 404
+	zeroID := "00000000-0000-0000-0000-000000000000"
+	if res := ta.do(t, "GET", "/api/v1/products/"+zeroID, nil, ""); res.StatusCode != http.StatusNotFound {
+		t.Errorf("get by non-existent id: %d, want 404", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+}
+
+func TestRoutes_ProductGetByName_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "getbyname@example.com")
+
+	res := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Keyboard", "description": "mechanical", "price": 7999, "stock_quantity": 50,
+	}, cookie)
+	res.Body.Close()
+
+	// Get by name → 200 (ResponseProduct embeds Product at top level)
+	var got struct {
+		Name string `json:"name"`
+	}
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products/name/Keyboard", nil, ""), &got)
+	if got.Name != "Keyboard" {
+		t.Errorf("get by name: name=%q, want Keyboard", got.Name)
+	}
+
+	// Get by name not found → 404
+	if res := ta.do(t, "GET", "/api/v1/products/name/NonExistent", nil, ""); res.StatusCode != http.StatusNotFound {
+		t.Errorf("get by non-existent name: %d, want 404", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+}
+
+func TestRoutes_ProductUnlink_Success_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "unlink-ok@example.com")
+
+	// Create category
+	catRes := ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": "Shoes"}, cookie)
+	var cat struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, catRes, &cat)
+
+	// Create product
+	prodRes := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Sneakers", "description": "comfy", "price": 5999, "stock_quantity": 20,
+	}, cookie)
+	var prod struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, prodRes, &prod)
+
+	// Link
+	linkRes := ta.do(t, "POST", "/api/v1/products/"+prod.ID+"/categories/link",
+		map[string]string{"category_id": cat.ID}, cookie)
+	var linked struct {
+		Categories []struct{ Name string } `json:"categories"`
+	}
+	decodeBody(t, linkRes, &linked)
+	if len(linked.Categories) != 1 {
+		t.Fatalf("after link: %d categories, want 1", len(linked.Categories))
+	}
+
+	// Unlink → 200 with empty categories
+	unlinkRes := ta.do(t, "POST", "/api/v1/products/"+prod.ID+"/categories/unlink",
+		map[string]string{"category_id": cat.ID}, cookie)
+	decodeBody(t, unlinkRes, &linked)
+	if len(linked.Categories) != 0 {
+		t.Errorf("after unlink: %d categories, want 0", len(linked.Categories))
+	}
+}
+
+func TestRoutes_ProductDelete_Success_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "del-ok@example.com")
+
+	// Create product
+	prodRes := ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "ToDelete", "description": "will be deleted", "price": 100, "stock_quantity": 1,
+	}, cookie)
+	var prod struct {
+		ID string `json:"id"`
+	}
+	decodeBody(t, prodRes, &prod)
+
+	// Delete → 204
+	if res := ta.do(t, "DELETE", "/api/v1/products/"+prod.ID, nil, cookie); res.StatusCode != http.StatusNoContent {
+		t.Errorf("delete: %d, want 204", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+
+	// Verify gone → 404
+	if res := ta.do(t, "GET", "/api/v1/products/"+prod.ID, nil, ""); res.StatusCode != http.StatusNotFound {
+		t.Errorf("get after delete: %d, want 404", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
+}
+
+func TestRoutes_CategoryList_DefaultLimit_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "cat-list-default@example.com")
+
+	// Create 3 categories
+	for _, name := range []string{"Alpha", "Beta", "Gamma"} {
+		res := ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": name}, cookie)
+		res.Body.Close()
+	}
+
+	// List with default limit (no limit param → defaults to 20)
+	var list struct {
+		Categories []struct{ Name string } `json:"categories"`
+		Total      int64                   `json:"total"`
+		Limit      int                     `json:"limit"`
+	}
+	decodeBody(t, ta.do(t, "GET", "/api/v1/categories", nil, ""), &list)
+	if list.Total != 3 {
+		t.Errorf("default list total=%d, want 3", list.Total)
+	}
+	if list.Limit != 20 {
+		t.Errorf("default list limit=%d, want 20", list.Limit)
+	}
 }

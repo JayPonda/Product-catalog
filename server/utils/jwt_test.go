@@ -94,3 +94,44 @@ func TestParseAccessToken_UnexpectedSigningMethod(t *testing.T) {
 		t.Error("expected error for unexpected signing method, got nil")
 	}
 }
+
+func TestParseAccessToken_GarbageString(t *testing.T) {
+	_, err := ParseAccessToken("not-a-jwt-token", "secret")
+	if err == nil {
+		t.Error("expected error for garbage token string")
+	}
+}
+
+func TestParseAccessToken_EmptyString(t *testing.T) {
+	_, err := ParseAccessToken("", "secret")
+	if err == nil {
+		t.Error("expected error for empty token string")
+	}
+}
+
+func TestGenerateAccessToken_DifferentSecrets(t *testing.T) {
+	tok1, _ := GenerateAccessToken("u1", "secret-a", time.Minute)
+	tok2, _ := GenerateAccessToken("u1", "secret-b", time.Minute)
+	if tok1 == tok2 {
+		t.Error("tokens signed with different secrets should differ")
+	}
+}
+
+func TestParseAccessToken_ValidTokenWithExtraClaims(t *testing.T) {
+	tok, _ := GenerateAccessToken("user-456", "mysecret", time.Hour)
+	claims, err := ParseAccessToken(tok, "mysecret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.Subject != "user-456" {
+		t.Errorf("Subject = %q, want user-456", claims.Subject)
+	}
+}
+
+func TestGenerateRefreshToken_DifferentEachTime(t *testing.T) {
+	_, hash1, _ := GenerateRefreshToken()
+	_, hash2, _ := GenerateRefreshToken()
+	if hash1 == hash2 {
+		t.Error("two refresh tokens should produce different hashes")
+	}
+}

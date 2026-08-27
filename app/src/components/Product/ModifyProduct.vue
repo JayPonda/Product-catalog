@@ -29,6 +29,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ProductForm from './ProductForm.vue'
 import CategoryLinker from './CategoryLinker.vue'
+import logger from '@/utils/logger'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,10 +43,14 @@ const productId = computed(() => {
 
 function onError(message) {
   error.value = message
+  if (message) {
+    logger.Warn('ModifyProduct.vue', 'onError', String(message))
+  }
 }
 
 function onProductSaved(savedProduct) {
   error.value = ''
+  logger.Info('ModifyProduct.vue', 'onProductSaved', 'product saved', { id: savedProduct?.id })
   router.push({
     name: 'products-modify',
     params: { id: savedProduct.id },

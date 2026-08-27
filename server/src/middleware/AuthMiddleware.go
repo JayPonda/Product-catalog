@@ -1,37 +1,54 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/JayPonda/Product-catalog/server/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
-// RequireAuth parses the access_token cookie, validates it, and injects the
-// user ID into ctx.Locals(utils.UserContextKey). Apply to protected routes.
-func RequireAuth(secret string) fiber.Handler {
+func RequireAuth(secret string, logger *utils.StructuredLogger) fiber.Handler {
 	return func(ctx fiber.Ctx) error {
 		tokenString := ctx.Cookies("access_token")
+
 		if tokenString == "" {
-			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "missing access token",
-			})
+			logger.Warn(ctx, "AuthMiddleware.go", "RequireAuth", "missing access token", nil)
+			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing access token"})
 		}
 
-		claims, err := utils.ParseAccessToken(tokenString, secret)
-		if err != nil {
-			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid or expired access token",
-			})
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fiber.NewError(fiber.StatusUnauthorized, "unexpected signing method")
+			}
+			return []byte(secret), nil
+		})
+
+		if err != nil || !token.Valid {
+			logger.Error(ctx, "AuthMiddleware.go", "RequireAuth", "invalid token", utils.LoggerMeta{"error": err.Error()}, "")
+			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token"})
 		}
 
-		userID, err := uuid.Parse(claims.UserID)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token claims"})
+		}
+
+		sub, ok := claims["sub"].(string)
+		if !ok || strings.TrimSpace(sub) == "" {
+			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing subject in token"})
+		}
+
+		userID, err := uuid.Parse(sub)
 		if err != nil {
-			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid user id in token",
-			})
+			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid user id in token"})
 		}
 
 		ctx.Locals(utils.UserContextKey, userID)
+
+		logger.Debug(ctx, "AuthMiddleware.go", "RequireAuth", "user authenticated", utils.LoggerMeta{"user_id": userID.String()})
+
 		return ctx.Next()
 	}
 }

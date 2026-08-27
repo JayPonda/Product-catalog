@@ -19,6 +19,10 @@ vi.mock('@/network/request.js', () => ({
   deleteProduct: vi.fn(),
 }))
 
+vi.mock('@/utils/logger', () => ({
+  default: { Debug: vi.fn(), Info: vi.fn(), Warn: vi.fn(), Error: vi.fn() },
+}))
+
 import { getProducts, getMyProducts, deleteProduct } from '@/network/request.js'
 
 describe('Product/Index.vue', () => {

@@ -29,7 +29,7 @@ func newCategoryService(t *testing.T) *services.CategoryService {
 func TestCategoryService_Create_HappyPath(t *testing.T) {
 	svc := newCategoryService(t)
 
-	created, err := svc.CreateCategory(models.Category{Name: "  Gadgets "})
+	created, err := svc.CreateCategory(nil, models.Category{Name: "  Gadgets "})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestCategoryService_Create_EmptyName(t *testing.T) {
 	svc := newCategoryService(t)
 
 	for _, name := range []string{"", "   ", "\t"} {
-		if _, err := svc.CreateCategory(models.Category{Name: name}); !errors.Is(err, services.ErrEmptyCategoryName) {
+		if _, err := svc.CreateCategory(nil, models.Category{Name: name}); !errors.Is(err, services.ErrEmptyCategoryName) {
 			t.Errorf("name %q: expected ErrEmptyCategoryName, got %v", name, err)
 		}
 	}
@@ -51,11 +51,11 @@ func TestCategoryService_Create_EmptyName(t *testing.T) {
 func TestCategoryService_Create_Duplicate(t *testing.T) {
 	svc := newCategoryService(t)
 
-	if _, err := svc.CreateCategory(models.Category{Name: "dup"}); err != nil {
+	if _, err := svc.CreateCategory(nil, models.Category{Name: "dup"}); err != nil {
 		t.Fatal(err)
 	}
 	// Same name, different casing/whitespace must still be caught.
-	if _, err := svc.CreateCategory(models.Category{Name: "  DUP "}); !errors.Is(err, services.ErrDuplicateCategoryName) {
+	if _, err := svc.CreateCategory(nil, models.Category{Name: "  DUP "}); !errors.Is(err, services.ErrDuplicateCategoryName) {
 		t.Errorf("expected ErrDuplicateCategoryName, got %v", err)
 	}
 }
@@ -63,12 +63,12 @@ func TestCategoryService_Create_Duplicate(t *testing.T) {
 func TestCategoryService_List_PaginationFields(t *testing.T) {
 	svc := newCategoryService(t)
 	for _, n := range []string{"a", "b", "c"} {
-		if _, err := svc.CreateCategory(models.Category{Name: n}); err != nil {
+		if _, err := svc.CreateCategory(nil, models.Category{Name: n}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	resp, err := svc.ListCategories(2, 1)
+	resp, err := svc.ListCategories(nil, 2, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,11 +82,11 @@ func TestCategoryService_List_PaginationFields(t *testing.T) {
 
 func TestCategoryService_GetCategoryByNames(t *testing.T) {
 	svc := newCategoryService(t)
-	if _, err := svc.CreateCategory(models.Category{Name: "findme"}); err != nil {
+	if _, err := svc.CreateCategory(nil, models.Category{Name: "findme"}); err != nil {
 		t.Fatal(err)
 	}
 
-	found, err := svc.GetCategoryByNames([]string{"FINDME"})
+	found, err := svc.GetCategoryByNames(nil, []string{"FINDME"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,12 +98,12 @@ func TestCategoryService_GetCategoryByNames(t *testing.T) {
 func TestCategoryService_MatchCategories(t *testing.T) {
 	svc := newCategoryService(t)
 	for _, n := range []string{"wood", "wool", "steel"} {
-		if _, err := svc.CreateCategory(models.Category{Name: n}); err != nil {
+		if _, err := svc.CreateCategory(nil, models.Category{Name: n}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	matches, err := svc.MatchCategories("WO", 10)
+	matches, err := svc.MatchCategories(nil, "WO", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,15 +114,15 @@ func TestCategoryService_MatchCategories(t *testing.T) {
 
 func TestCategoryService_Delete(t *testing.T) {
 	svc := newCategoryService(t)
-	created, err := svc.CreateCategory(models.Category{Name: "doomed"})
+	created, err := svc.CreateCategory(nil, models.Category{Name: "doomed"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := svc.DeleteCategory(created.ID); err != nil {
+	if err := svc.DeleteCategory(nil, created.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.GetCategoryById(created.ID); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := svc.GetCategoryById(nil, created.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected ErrNoRows after delete, got %v", err)
 	}
 }

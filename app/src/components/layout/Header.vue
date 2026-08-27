@@ -136,6 +136,7 @@ import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Package, Menu, X } from '@lucide/vue'
+import logger from '@/utils/logger'
 
 const mobileMenuOpen = ref(false)
 const router = useRouter()
@@ -144,6 +145,7 @@ const auth = useAuthStore()
 async function handleLogout() {
   mobileMenuOpen.value = false
   await auth.logout()
+  logger.Debug('Header.vue', 'handleLogout', 'user logged out')
   router.push('/login')
 }
 </script>
