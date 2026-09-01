@@ -113,6 +113,32 @@ func TestProductService_GetProductById_WithCategories_E2E(t *testing.T) {
 	}
 }
 
+func TestProductService_GetProductById_NoCategories_E2E(t *testing.T) {
+	svc, _ := newProductService(t)
+	userID := uuid.New()
+
+	created, err := svc.CreateProduct(nil, v1.RequestProduct{
+		Name:          "Solo Product",
+		Description:   "no category product",
+		Price:         500,
+		StockQuantity: 10,
+	}, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.GetProductById(nil, created.Product.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Product.Name != "Solo Product" {
+		t.Errorf("unexpected product name: %q", got.Product.Name)
+	}
+	if len(got.Categories) != 0 {
+		t.Errorf("expected 0 categories, got %+v", got.Categories)
+	}
+}
+
 func TestProductService_ListProducts_HydratesCategories_E2E(t *testing.T) {
 	svc, categoryRepo := newProductService(t)
 	userID := uuid.New()

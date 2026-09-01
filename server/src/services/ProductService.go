@@ -40,6 +40,10 @@ func (productServicePtr *ProductService) getProductsCategory(ctx utils.RequestCo
 		return []models.Category{}, err
 	}
 
+	if len(productCategories) == 0 {
+		return []models.Category{}, nil
+	}
+
 	var categoryIds []uuid.UUID
 	for _, productCategory := range productCategories {
 		categoryIds = append(categoryIds, productCategory.CategoryID)
@@ -128,30 +132,32 @@ func (productServicePtr *ProductService) ListProducts(ctx utils.RequestContext, 
 			return response, err
 		}
 
-		categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
-		for _, link := range links {
-			categoryIDSet[link.CategoryID] = struct{}{}
-		}
+		if len(links) > 0 {
+			categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
+			for _, link := range links {
+				categoryIDSet[link.CategoryID] = struct{}{}
+			}
 
-		categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
-		for categoryID := range categoryIDSet {
-			categoryIDs = append(categoryIDs, categoryID)
-		}
+			categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
+			for categoryID := range categoryIDSet {
+				categoryIDs = append(categoryIDs, categoryID)
+			}
 
-		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(ctx, categoryIDs)
-		if err != nil {
-			productServicePtr.Logger.Error(ctx, "ProductService.go", "ListProducts", "failed to get categories", utils.LoggerMeta{"category_count": len(categoryIDs)}, err.Error())
-			return response, err
-		}
+			categories, err := productServicePtr.CategoryManager.GetCategoryByIds(ctx, categoryIDs)
+			if err != nil {
+				productServicePtr.Logger.Error(ctx, "ProductService.go", "ListProducts", "failed to get categories", utils.LoggerMeta{"category_count": len(categoryIDs)}, err.Error())
+				return response, err
+			}
 
-		categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
-		for _, category := range categories {
-			categoriesByID[category.ID] = category
-		}
+			categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
+			for _, category := range categories {
+				categoriesByID[category.ID] = category
+			}
 
-		for _, link := range links {
-			if category, ok := categoriesByID[link.CategoryID]; ok {
-				categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+			for _, link := range links {
+				if category, ok := categoriesByID[link.CategoryID]; ok {
+					categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+				}
 			}
 		}
 	}
@@ -243,30 +249,32 @@ func (productServicePtr *ProductService) ListMyProducts(ctx utils.RequestContext
 			return response, err
 		}
 
-		categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
-		for _, link := range links {
-			categoryIDSet[link.CategoryID] = struct{}{}
-		}
+		if len(links) > 0 {
+			categoryIDSet := make(map[uuid.UUID]struct{}, len(links))
+			for _, link := range links {
+				categoryIDSet[link.CategoryID] = struct{}{}
+			}
 
-		categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
-		for categoryID := range categoryIDSet {
-			categoryIDs = append(categoryIDs, categoryID)
-		}
+			categoryIDs := make([]uuid.UUID, 0, len(categoryIDSet))
+			for categoryID := range categoryIDSet {
+				categoryIDs = append(categoryIDs, categoryID)
+			}
 
-		categories, err := productServicePtr.CategoryManager.GetCategoryByIds(ctx, categoryIDs)
-		if err != nil {
-			productServicePtr.Logger.Error(ctx, "ProductService.go", "ListMyProducts", "failed to get categories", utils.LoggerMeta{"user_id": userID.String(), "category_count": len(categoryIDs)}, err.Error())
-			return response, err
-		}
+			categories, err := productServicePtr.CategoryManager.GetCategoryByIds(ctx, categoryIDs)
+			if err != nil {
+				productServicePtr.Logger.Error(ctx, "ProductService.go", "ListMyProducts", "failed to get categories", utils.LoggerMeta{"user_id": userID.String(), "category_count": len(categoryIDs)}, err.Error())
+				return response, err
+			}
 
-		categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
-		for _, category := range categories {
-			categoriesByID[category.ID] = category
-		}
+			categoriesByID := make(map[uuid.UUID]models.Category, len(categories))
+			for _, category := range categories {
+				categoriesByID[category.ID] = category
+			}
 
-		for _, link := range links {
-			if category, ok := categoriesByID[link.CategoryID]; ok {
-				categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+			for _, link := range links {
+				if category, ok := categoriesByID[link.CategoryID]; ok {
+					categoriesByProduct[link.ProductID] = append(categoriesByProduct[link.ProductID], category)
+				}
 			}
 		}
 	}

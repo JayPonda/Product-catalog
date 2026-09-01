@@ -104,6 +104,41 @@ func TestCategoryRepo_GetByNames_Normalized_E2E(t *testing.T) {
 	}
 }
 
+func TestCategoryRepo_GetByIds_Empty_E2E(t *testing.T) {
+	repo := newCategoryRepo(t)
+	seedCategories(t, repo, "books", "games")
+
+	found, err := repo.GetCategoryByIds(nil, []uuid.UUID{})
+	if err != nil {
+		t.Fatalf("unexpected error on empty ids: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("expected 0 categories, got %d", len(found))
+	}
+}
+
+func TestCategoryRepo_GetByNames_Empty_E2E(t *testing.T) {
+	repo := newCategoryRepo(t)
+	seedCategories(t, repo, "books", "games")
+
+	found, err := repo.GetCategoryByNames(nil, []string{})
+	if err != nil {
+		t.Fatalf("unexpected error on empty names: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("expected 0 categories, got %d", len(found))
+	}
+
+	// All blank / whitespace names that normalize to empty
+	foundBlank, err := repo.GetCategoryByNames(nil, []string{"", "   "})
+	if err != nil {
+		t.Fatalf("unexpected error on blank names: %v", err)
+	}
+	if len(foundBlank) != 0 {
+		t.Fatalf("expected 0 categories for blanks, got %d", len(foundBlank))
+	}
+}
+
 func TestCategoryRepo_MatchByNamePrefix_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seedCategories(t, repo, "shoes", "shirts", "shorts", "hats")
