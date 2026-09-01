@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import ModifyProduct from '../ModifyProduct.vue'
 
 const mockPush = vi.fn()
@@ -12,9 +13,12 @@ vi.mock('vue-router', () => ({
   }),
 }))
 
+import { useNotificationStore } from '@/stores/notifications'
+
 describe('ModifyProduct.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setActivePinia(createPinia())
   })
 
   it('renders child sub-components properly', () => {
@@ -54,7 +58,10 @@ describe('ModifyProduct.vue', () => {
     })
   })
 
-  it('displays error banner if children emit error event', async () => {
+  it('triggers notification error if children emit error event', async () => {
+    const notificationStore = useNotificationStore()
+    vi.spyOn(notificationStore, 'error')
+
     const wrapper = mount(ModifyProduct, {
       global: {
         stubs: {
@@ -68,6 +75,6 @@ describe('ModifyProduct.vue', () => {
     childForm.vm.$emit('error', 'Something failed!')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Something failed!')
+    expect(notificationStore.error).toHaveBeenCalledWith('Something failed!')
   })
 })

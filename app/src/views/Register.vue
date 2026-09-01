@@ -6,21 +6,6 @@
         <p class="mt-1 text-sm text-gray-500">Register to get started</p>
       </div>
 
-      <div
-        v-if="error"
-        role="alert"
-        class="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-      >
-        <span>{{ error }}</span>
-        <button
-          @click="error = ''"
-          aria-label="Dismiss"
-          class="ml-4 rounded p-1 leading-none text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 focus:outline-none"
-        >
-          &#10005;
-        </button>
-      </div>
-
       <form class="space-y-4" @submit.prevent="submit">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -172,16 +157,17 @@
 import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
 import { Eye, EyeOff } from '@lucide/vue'
 import logger from '@/utils/logger'
 
 const router = useRouter()
 const auth = useAuthStore()
+const notifications = useNotificationStore()
 
 const loading = ref(false)
 const showPassword = ref(false)
 const showConfirm = ref(false)
-const error = ref('')
 const fieldErrors = reactive({
   first_name: '',
   last_name: '',
@@ -221,7 +207,6 @@ function validate() {
 }
 
 async function submit() {
-  error.value = ''
   if (!validate()) return
 
   logger.Debug('Register.vue', 'submit', 'registration attempt', { email: form.email.trim() })
@@ -238,11 +223,12 @@ async function submit() {
     logger.Warn('Register.vue', 'submit', 'registration failed', {
       error: res.message || 'Registration failed.',
     })
-    error.value = res.message || 'Registration failed.'
+    notifications.error(res.message || 'Registration failed.')
     return
   }
 
   logger.Info('Register.vue', 'submit', 'registration successful')
+  notifications.success('Registration successful! Please log in.')
   router.push('/login')
 }
 </script>

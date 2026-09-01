@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import Login from '../Login.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
 
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
@@ -74,8 +75,10 @@ describe('Login.vue', () => {
     expect(mockPush).toHaveBeenCalledWith('/products')
   })
 
-  it('displays auth error message on failure', async () => {
+  it('triggers notification error message on failure', async () => {
     const authStore = useAuthStore()
+    const notificationStore = useNotificationStore()
+    vi.spyOn(notificationStore, 'error')
     vi.spyOn(authStore, 'login').mockResolvedValue({
       ok: false,
       error: 401,
@@ -89,31 +92,7 @@ describe('Login.vue', () => {
     await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Invalid credentials')
+    expect(notificationStore.error).toHaveBeenCalledWith('Invalid credentials')
     expect(mockPush).not.toHaveBeenCalled()
-  })
-
-  it('dismisses auth error when dismiss button is clicked', async () => {
-    const authStore = useAuthStore()
-    vi.spyOn(authStore, 'login').mockResolvedValue({
-      ok: false,
-      error: 401,
-      message: 'Invalid credentials',
-    })
-
-    const wrapper = mount(Login)
-    await wrapper.find('input#email').setValue('user@example.com')
-    await wrapper.find('input#password').setValue('wrong')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-
-    const dismissBtn = wrapper.find('button[aria-label="Dismiss"]')
-    expect(dismissBtn.exists()).toBe(true)
-    await dismissBtn.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 })

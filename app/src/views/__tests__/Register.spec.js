@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import Register from '../Register.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
 
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
@@ -96,8 +97,10 @@ describe('Register.vue', () => {
     expect(mockPush).toHaveBeenCalledWith('/login')
   })
 
-  it('displays auth error message on server failure', async () => {
+  it('triggers notification error message on server failure', async () => {
     const authStore = useAuthStore()
+    const notificationStore = useNotificationStore()
+    vi.spyOn(notificationStore, 'error')
     vi.spyOn(authStore, 'register').mockResolvedValue({
       ok: false,
       error: 400,
@@ -114,35 +117,7 @@ describe('Register.vue', () => {
     await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Email already exists')
+    expect(notificationStore.error).toHaveBeenCalledWith('Email already exists')
     expect(mockPush).not.toHaveBeenCalled()
-  })
-
-  it('dismisses auth error when dismiss button is clicked', async () => {
-    const authStore = useAuthStore()
-    vi.spyOn(authStore, 'register').mockResolvedValue({
-      ok: false,
-      error: 400,
-      message: 'Email already exists',
-    })
-
-    const wrapper = mount(Register)
-    await wrapper.find('input#first_name').setValue('John')
-    await wrapper.find('input#last_name').setValue('Doe')
-    await wrapper.find('input#email').setValue('john.doe@example.com')
-    await wrapper.find('input#password').setValue('password123')
-    await wrapper.find('input#confirm_password').setValue('password123')
-
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-
-    const dismissBtn = wrapper.find('button[aria-label="Dismiss"]')
-    expect(dismissBtn.exists()).toBe(true)
-    await dismissBtn.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 })

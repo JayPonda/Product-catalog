@@ -6,21 +6,6 @@
         <p class="mt-1 text-sm text-gray-500">Sign in to your account</p>
       </div>
 
-      <div
-        v-if="error"
-        role="alert"
-        class="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-      >
-        <span>{{ error }}</span>
-        <button
-          @click="error = ''"
-          aria-label="Dismiss"
-          class="ml-4 rounded p-1 leading-none text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 focus:outline-none"
-        >
-          &#10005;
-        </button>
-      </div>
-
       <form class="space-y-4" @submit.prevent="submit">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700"
@@ -96,15 +81,16 @@
 import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
 import { Eye, EyeOff } from '@lucide/vue'
 import logger from '@/utils/logger'
 
 const router = useRouter()
 const auth = useAuthStore()
+const notifications = useNotificationStore()
 
 const loading = ref(false)
 const showPassword = ref(false)
-const error = ref('')
 const fieldErrors = reactive({ email: '', password: '' })
 const form = reactive({ email: '', password: '' })
 
@@ -115,7 +101,6 @@ function validate() {
 }
 
 async function submit() {
-  error.value = ''
   if (!validate()) return
 
   logger.Debug('Login.vue', 'submit', 'login attempt', { email: form.email.trim() })
@@ -125,11 +110,12 @@ async function submit() {
 
   if (!res.ok) {
     logger.Warn('Login.vue', 'submit', 'login failed', { error: res.message || 'Login failed.' })
-    error.value = res.message || 'Login failed.'
+    notifications.error(res.message || 'Login failed.')
     return
   }
 
   logger.Info('Login.vue', 'submit', 'login successful')
+  notifications.success('Welcome back!')
   router.push('/products')
 }
 </script>

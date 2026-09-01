@@ -14,6 +14,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
+      notivue:
+        specifier: ^2.4.5
+        version: 2.4.5
       pinia:
         specifier: ^4.0.2
         version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.41(typescript@6.0.3))
@@ -1806,6 +1809,20 @@ packages:
 
   nostics@1.2.0:
     resolution: {integrity: sha512-FGqEfhQjrvo1lL8KFifdTQiNwwQHJxC1jtYE1Rc54qF/jxONUNL+kC9gS1krX8Q65PgrQ5fCqH/I4NhWBvdSqg==}
+
+  notivue@2.4.5:
+    resolution: {integrity: sha512-7yBdaKesUZIwdcQP3nv1oWYyisI2bURkZ+D9KfLgeNqguHUzkQ1WdhGcTj59PBZa8mqa1/K5Mh8YsphSToMKcQ==}
+    peerDependencies:
+      '@nuxt/kit': '>=3.5.0'
+      '@nuxt/schema': '>=3.5.0'
+      defu: '>=6'
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      '@nuxt/schema':
+        optional: true
+      defu:
+        optional: true
 
   npm-normalize-package-bin@6.0.0:
     resolution: {integrity: sha512-tdt4aFn9QamlhdN3HV2D2ccpBwO5/fyjjbXUxYA6uBjyekMZcZvDq0aSj9t5Jo+tih6AYFnt/cuIRn9013e0Uw==}
@@ -3966,6 +3983,8 @@ snapshots:
       abbrev: 2.0.0
 
   nostics@1.2.0: {}
+
+  notivue@2.4.5: {}
 
   npm-normalize-package-bin@6.0.0: {}
 
