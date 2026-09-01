@@ -65,6 +65,17 @@ func TestProductCategoryRepo_Link_AndFetch_E2E(t *testing.T) {
 	}
 }
 
+func TestProductCategoryRepo_GetCategoriesByProductIds_Empty_E2E(t *testing.T) {
+	pcRepo, _ := newProductCategoryRepo(t)
+	byIds, err := pcRepo.GetCategoriesByProductIds(nil, []uuid.UUID{})
+	if err != nil {
+		t.Fatalf("unexpected error on empty productIDs: %v", err)
+	}
+	if len(byIds) != 0 {
+		t.Errorf("expected 0 links via empty ids query, got %d", len(byIds))
+	}
+}
+
 func TestProductCategoryRepo_Unlink_E2E(t *testing.T) {
 	pcRepo, catRepo := newProductCategoryRepo(t)
 	productID, catID := linkFixture(t, pcRepo, catRepo)

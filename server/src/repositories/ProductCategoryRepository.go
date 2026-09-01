@@ -67,6 +67,10 @@ func (repository *ProductCategoryRepository) GetCategoriesByProductIds(
 	productIDs []uuid.UUID,
 	exec ...utils.Executor,
 ) ([]models.ProductCategory, error) {
+	if len(productIDs) == 0 {
+		return []models.ProductCategory{}, nil
+	}
+
 	var productCategories []models.ProductCategory
 	l := repository.Logger
 

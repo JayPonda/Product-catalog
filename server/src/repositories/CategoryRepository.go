@@ -63,6 +63,10 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryById(ctx utils.Reque
 }
 
 func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByIds(ctx utils.RequestContext, ids []uuid.UUID, exec ...utils.Executor) ([]models.Category, error) {
+	if len(ids) == 0 {
+		return []models.Category{}, nil
+	}
+
 	var category []models.Category
 	l := CategoryRepositoryPtr.Logger
 
@@ -100,6 +104,10 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(ctx utils.Re
 		if name = utils.NormalizeName(name); name != "" {
 			normalized = append(normalized, name)
 		}
+	}
+
+	if len(normalized) == 0 {
+		return []models.Category{}, nil
 	}
 
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
