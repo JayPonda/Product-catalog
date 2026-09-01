@@ -120,14 +120,28 @@ export function getCategories(page, limit) {
   return request('/categories', { params: { limit, offset } })
 }
 
-export function getProducts(page, limit) {
+export function getProducts(page, limit, { name, categoryIds } = {}) {
   const offset = page * limit
-  return request('/products', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  if (categoryIds && categoryIds.length > 0) {
+    params.category_ids = categoryIds.join(',')
+  }
+  return request('/products', { params })
 }
 
-export function getMyProducts(page, limit) {
+export function getMyProducts(page, limit, { name, categoryIds } = {}) {
   const offset = page * limit
-  return request('/my-products', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  if (categoryIds && categoryIds.length > 0) {
+    params.category_ids = categoryIds.join(',')
+  }
+  return request('/my-products', { params })
 }
 
 export function searchCategory(name) {

@@ -237,7 +237,7 @@ func TestProductService_ListProducts_LinksFailure(t *testing.T) {
 	mock.ExpectQuery(`COUNT`).WillReturnRows(oneRow([]string{"count"}, 1))
 	mock.ExpectQuery(`FROM .product_categories.`).WillReturnError(errBoom)
 
-	_, err := svc.ListProducts(nil, 20, 0)
+	_, err := svc.ListProducts(nil, 20, 0, models.ProductFilter{})
 	wantErr(t, err, "ListProducts links query")
 }
 
@@ -251,7 +251,7 @@ func TestProductService_ListProducts_CategoriesFailure(t *testing.T) {
 		WillReturnRows(oneRow(linkCols, uuid.NewString(), pid, uuid.NewString(), base, base, nil))
 	mock.ExpectQuery(`FROM .categories.`).WillReturnError(errBoom)
 
-	_, err := svc.ListProducts(nil, 20, 0)
+	_, err := svc.ListProducts(nil, 20, 0, models.ProductFilter{})
 	wantErr(t, err, "ListProducts categories query")
 }
 
@@ -511,7 +511,7 @@ func TestProductService_ListMyProducts_GetMyProductsFailure(t *testing.T) {
 	uid := uuid.New()
 	mock.ExpectQuery(`FROM .products.`).WillReturnError(errBoom)
 
-	_, err := svc.ListMyProducts(nil, uid, 10, 0)
+	_, err := svc.ListMyProducts(nil, uid, 10, 0, models.ProductFilter{})
 	wantErr(t, err, "ListMyProducts GetMyProducts")
 }
 
@@ -526,7 +526,7 @@ func TestProductService_ListMyProducts_GetCategoriesByProductIdsFailure(t *testi
 	// ProductCategoryManager.GetCategoriesByProductIds fails
 	mock.ExpectQuery(`FROM .product_categories.`).WillReturnError(errBoom)
 
-	_, err := svc.ListMyProducts(nil, uid, 10, 0)
+	_, err := svc.ListMyProducts(nil, uid, 10, 0, models.ProductFilter{})
 	wantErr(t, err, "ListMyProducts GetCategoriesByProductIds")
 }
 
@@ -545,7 +545,7 @@ func TestProductService_ListMyProducts_GetCategoryByIdsFailure(t *testing.T) {
 	// CategoryManager.GetCategoryByIds fails
 	mock.ExpectQuery(`FROM .categories.`).WillReturnError(errBoom)
 
-	_, err := svc.ListMyProducts(nil, uid, 10, 0)
+	_, err := svc.ListMyProducts(nil, uid, 10, 0, models.ProductFilter{})
 	wantErr(t, err, "ListMyProducts GetCategoryByIds")
 }
 

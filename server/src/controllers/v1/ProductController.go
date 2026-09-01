@@ -2,7 +2,9 @@ package controllersv1
 
 import (
 	"errors"
+	"strings"
 
+	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/services"
 	v1 "github.com/JayPonda/Product-catalog/server/src/structs/v1"
 	"github.com/JayPonda/Product-catalog/server/utils"
@@ -25,16 +27,40 @@ func NewProductController(service *services.ProductService, logger *utils.Struct
 	}
 }
 
+func parseProductFilter(query v1.ListProductsQuery) (models.ProductFilter, error) {
+	var categoryIDs []uuid.UUID
+	for _, raw := range query.CategoryIDs {
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := uuid.Parse(part)
+			if err != nil {
+				return models.ProductFilter{}, err
+			}
+			categoryIDs = append(categoryIDs, id)
+		}
+	}
+
+	return models.ProductFilter{
+		Name:        strings.TrimSpace(query.Name),
+		CategoryIDs: categoryIDs,
+	}, nil
+}
+
 // ListProducts godoc
 // @Summary      List products
 // @Description  List products with pagination, newest first
 // @Tags         products
 // @Produce      json
-// @Param        limit   query  int  false  "Page size (20|50|100)"  default(20)
-// @Param        offset  query  int  false  "Offset"             default(0)
-// @Success      200     {object}  v1.ListProductsResponse
-// @Failure      400     {object}  map[string]string
-// @Failure      500     {object}  map[string]string
+// @Param        limit         query  int     false  "Page size (20|50|100)"  default(20)
+// @Param        offset        query  int     false  "Offset"             default(0)
+// @Param        name          query  string  false  "Product name filter"
+// @Param        category_ids  query  string  false  "Category UUIDs (comma-separated or repeated)"
+// @Success      200           {object}  v1.ListProductsResponse
+// @Failure      400           {object}  map[string]string
+// @Failure      500           {object}  map[string]string
 // @Router       /products [get]
 func (pc *ProductController) ListProducts(ctx fiber.Ctx) error {
 	pc.Logger.Debug(ctx, "ProductController.go", "ListProducts", "request received", nil)
@@ -61,7 +87,16 @@ func (pc *ProductController) ListProducts(ctx fiber.Ctx) error {
 		query.Limit = 20
 	}
 
-	response, err := pc.Service.ListProducts(ctx, query.Limit, query.Offset)
+	filter, err := parseProductFilter(query)
+	if err != nil {
+		pc.Logger.Warn(ctx, "ProductController.go", "ListProducts", "invalid category_ids parameter", utils.LoggerMeta{"error": err.Error()})
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "invalid category_ids parameter",
+			"details": err.Error(),
+		})
+	}
+
+	response, err := pc.Service.ListProducts(ctx, query.Limit, query.Offset, filter)
 	if err != nil {
 		pc.Logger.Error(ctx, "ProductController.go", "ListProducts", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -69,7 +104,7 @@ func (pc *ProductController) ListProducts(ctx fiber.Ctx) error {
 		})
 	}
 
-	pc.Logger.Debug(ctx, "ProductController.go", "ListProducts", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset})
+	pc.Logger.Debug(ctx, "ProductController.go", "ListProducts", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)})
 	return ctx.JSON(response)
 }
 
@@ -129,11 +164,13 @@ func (pc *ProductController) CreateProduct(ctx fiber.Ctx) error {
 // @Description  List products owned by the authenticated user, newest first
 // @Tags         products
 // @Produce      json
-// @Param        limit   query  int  false  "Page size (20|50|100)"  default(20)
-// @Param        offset  query  int  false  "Offset"             default(0)
-// @Success      200     {object}  v1.ListProductsResponse
-// @Failure      401     {object}  map[string]string
-// @Failure      500     {object}  map[string]string
+// @Param        limit         query  int     false  "Page size (20|50|100)"  default(20)
+// @Param        offset        query  int     false  "Offset"             default(0)
+// @Param        name          query  string  false  "Product name filter"
+// @Param        category_ids  query  string  false  "Category UUIDs (comma-separated or repeated)"
+// @Success      200           {object}  v1.ListProductsResponse
+// @Failure      401           {object}  map[string]string
+// @Failure      500           {object}  map[string]string
 // @Router       /my-products [get]
 func (pc *ProductController) ListMyProducts(ctx fiber.Ctx) error {
 	pc.Logger.Debug(ctx, "ProductController.go", "ListMyProducts", "request received", nil)
@@ -162,7 +199,16 @@ func (pc *ProductController) ListMyProducts(ctx fiber.Ctx) error {
 
 	userID := ctx.Locals(utils.UserContextKey).(uuid.UUID)
 
-	response, err := pc.Service.ListMyProducts(ctx, userID, query.Limit, query.Offset)
+	filter, err := parseProductFilter(query)
+	if err != nil {
+		pc.Logger.Warn(ctx, "ProductController.go", "ListMyProducts", "invalid category_ids parameter", utils.LoggerMeta{"error": err.Error()})
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "invalid category_ids parameter",
+			"details": err.Error(),
+		})
+	}
+
+	response, err := pc.Service.ListMyProducts(ctx, userID, query.Limit, query.Offset, filter)
 	if err != nil {
 		pc.Logger.Error(ctx, "ProductController.go", "ListMyProducts", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -170,7 +216,7 @@ func (pc *ProductController) ListMyProducts(ctx fiber.Ctx) error {
 		})
 	}
 
-	pc.Logger.Debug(ctx, "ProductController.go", "ListMyProducts", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset})
+	pc.Logger.Debug(ctx, "ProductController.go", "ListMyProducts", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)})
 	return ctx.JSON(response)
 }
 

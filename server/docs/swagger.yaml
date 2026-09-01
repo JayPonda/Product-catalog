@@ -153,6 +153,8 @@ definitions:
         type: integer
       updated_at:
         type: string
+      user_id:
+        $ref: '#/definitions/uuid.NullUUID'
     type: object
   structsv1.UserResponse:
     properties:
@@ -164,6 +166,14 @@ definitions:
         type: string
       last_name:
         type: string
+    type: object
+  uuid.NullUUID:
+    properties:
+      uuid:
+        type: string
+      valid:
+        description: Valid is true if UUID is not NULL
+        type: boolean
     type: object
 info:
   contact: {}
@@ -379,6 +389,50 @@ paths:
       summary: Match categories by name prefix
       tags:
       - categories
+  /my-products:
+    get:
+      description: List products owned by the authenticated user, newest first
+      parameters:
+      - default: 20
+        description: Page size (20|50|100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      - description: Product name filter
+        in: query
+        name: name
+        type: string
+      - description: Category UUIDs (comma-separated or repeated)
+        in: query
+        name: category_ids
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structsv1.ListProductsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List my products
+      tags:
+      - products
   /products:
     get:
       description: List products with pagination, newest first
@@ -393,6 +447,14 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Product name filter
+        in: query
+        name: name
+        type: string
+      - description: Category UUIDs (comma-separated or repeated)
+        in: query
+        name: category_ids
+        type: string
       produces:
       - application/json
       responses:

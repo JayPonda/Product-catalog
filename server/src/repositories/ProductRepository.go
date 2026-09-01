@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
@@ -101,17 +102,44 @@ func (ProductRepositoryPtr *ProductRepository) GetProductByName(ctx utils.Reques
 	return product, nil
 }
 
-func (ProductRepositoryPtr *ProductRepository) GetProducts(ctx utils.RequestContext, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+func buildProductConditions(db utils.Executor, filter models.ProductFilter, userID *uuid.UUID) []goqu.Expression {
+	var conditions []goqu.Expression
+	conditions = append(conditions, goqu.C("deleted_at").IsNull())
+
+	if userID != nil {
+		conditions = append(conditions, goqu.C("user_id").Eq(*userID))
+	}
+
+	trimmedName := strings.TrimSpace(filter.Name)
+	if trimmedName != "" {
+		escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+		pattern := "%" + escaper.Replace(strings.ToLower(trimmedName)) + "%"
+		conditions = append(conditions, goqu.L("LOWER(name) LIKE ?", pattern))
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		subQuery := db.From(PRODUCT_CATEGORY_DB).
+			Select("product_id").
+			Where(
+				goqu.C("deleted_at").IsNull(),
+				goqu.C("category_id").In(filter.CategoryIDs),
+			)
+		conditions = append(conditions, goqu.C("id").In(subQuery))
+	}
+
+	return conditions
+}
+
+func (ProductRepositoryPtr *ProductRepository) GetProducts(ctx utils.RequestContext, limit int, offset int, filter models.ProductFilter, exec ...utils.Executor) ([]models.Product, int64, error) {
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
 	l := ProductRepositoryPtr.Logger
 
 	var products []models.Product
+	conditions := buildProductConditions(db, filter, nil)
 
 	err := db.
 		From(PRODUCT_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-		).
+		Where(conditions...).
 		Order(goqu.I("created_at").Desc()).
 		Limit(uint(limit)).
 		Offset(uint(offset)).
@@ -129,7 +157,7 @@ func (ProductRepositoryPtr *ProductRepository) GetProducts(ctx utils.RequestCont
 		ScanStructs(&products)
 
 	if err != nil {
-		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to query products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to query products", utils.LoggerMeta{"limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return nil, 0, err
 	}
 
@@ -137,14 +165,12 @@ func (ProductRepositoryPtr *ProductRepository) GetProducts(ctx utils.RequestCont
 
 	_, err = db.
 		From(PRODUCT_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-		).
+		Where(conditions...).
 		Select(goqu.COUNT("*")).
 		ScanVal(&total)
 
 	if err != nil {
-		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to count products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetProducts", "failed to count products", utils.LoggerMeta{"limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return nil, 0, err
 	}
 
@@ -251,18 +277,16 @@ func (ProductRepositoryPtr *ProductRepository) DeleteProduct(ctx utils.RequestCo
 }
 
 // GetMyProducts returns products owned by the given user with pagination.
-func (ProductRepositoryPtr *ProductRepository) GetMyProducts(ctx utils.RequestContext, userID uuid.UUID, limit int, offset int, exec ...utils.Executor) ([]models.Product, int64, error) {
+func (ProductRepositoryPtr *ProductRepository) GetMyProducts(ctx utils.RequestContext, userID uuid.UUID, limit int, offset int, filter models.ProductFilter, exec ...utils.Executor) ([]models.Product, int64, error) {
 	db := utils.ResolveExecutor(ProductRepositoryPtr.Db, exec)
 	l := ProductRepositoryPtr.Logger
 
 	var products []models.Product
+	conditions := buildProductConditions(db, filter, &userID)
 
 	err := db.
 		From(PRODUCT_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-			goqu.C("user_id").Eq(userID),
-		).
+		Where(conditions...).
 		Order(goqu.I("created_at").Desc()).
 		Limit(uint(limit)).
 		Offset(uint(offset)).
@@ -280,7 +304,7 @@ func (ProductRepositoryPtr *ProductRepository) GetMyProducts(ctx utils.RequestCo
 		ScanStructs(&products)
 
 	if err != nil {
-		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to query user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to query user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return nil, 0, err
 	}
 
@@ -288,15 +312,12 @@ func (ProductRepositoryPtr *ProductRepository) GetMyProducts(ctx utils.RequestCo
 
 	_, err = db.
 		From(PRODUCT_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-			goqu.C("user_id").Eq(userID),
-		).
+		Where(conditions...).
 		Select(goqu.COUNT("*")).
 		ScanVal(&total)
 
 	if err != nil {
-		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to count user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "ProductRepository.go", "GetMyProducts", "failed to count user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return nil, 0, err
 	}
 

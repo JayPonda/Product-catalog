@@ -37,6 +37,13 @@ func TestRoutes_ProductList_QueryErrors(t *testing.T) {
 	} else {
 		res.Body.Close()
 	}
+
+	// Invalid category_ids UUID fails parsing -> 400.
+	if res := ta.do(t, "GET", "/api/v1/products?category_ids=not-a-uuid", nil, ""); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("list invalid category_ids: status=%d, want 400", res.StatusCode)
+	} else {
+		res.Body.Close()
+	}
 }
 
 func TestRoutes_ProductCreate_BodyErrors(t *testing.T) {

@@ -21,3 +21,9 @@ type Product struct {
 	// category fields
 	Categories []Category `json:"categories" db:"-"`
 }
+
+// ProductFilter defines filtering criteria for product queries.
+type ProductFilter struct {
+	Name        string      `json:"name"`
+	CategoryIDs []uuid.UUID `json:"category_ids"`
+}

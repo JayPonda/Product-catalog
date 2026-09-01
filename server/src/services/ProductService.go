@@ -109,12 +109,12 @@ func (productServicePtr *ProductService) GetProductByName(ctx utils.RequestConte
 
 }
 
-func (productServicePtr *ProductService) ListProducts(ctx utils.RequestContext, limit int, offset int) (v1.ListProductsResponse, error) {
+func (productServicePtr *ProductService) ListProducts(ctx utils.RequestContext, limit int, offset int, filter models.ProductFilter) (v1.ListProductsResponse, error) {
 	var response v1.ListProductsResponse
 
-	products, total, err := productServicePtr.ProductManager.GetProducts(ctx, limit, offset)
+	products, total, err := productServicePtr.ProductManager.GetProducts(ctx, limit, offset, filter)
 	if err != nil {
-		productServicePtr.Logger.Error(ctx, "ProductService.go", "ListProducts", "failed to list products", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		productServicePtr.Logger.Error(ctx, "ProductService.go", "ListProducts", "failed to list products", utils.LoggerMeta{"limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return response, err
 	}
 
@@ -226,12 +226,12 @@ func (productServicePtr *ProductService) CreateProduct(ctx utils.RequestContext,
 }
 
 // ListMyProducts returns the products owned by the given user.
-func (productServicePtr *ProductService) ListMyProducts(ctx utils.RequestContext, userID uuid.UUID, limit int, offset int) (v1.ListProductsResponse, error) {
+func (productServicePtr *ProductService) ListMyProducts(ctx utils.RequestContext, userID uuid.UUID, limit int, offset int, filter models.ProductFilter) (v1.ListProductsResponse, error) {
 	var response v1.ListProductsResponse
 
-	products, total, err := productServicePtr.ProductManager.GetMyProducts(ctx, userID, limit, offset)
+	products, total, err := productServicePtr.ProductManager.GetMyProducts(ctx, userID, limit, offset, filter)
 	if err != nil {
-		productServicePtr.Logger.Error(ctx, "ProductService.go", "ListMyProducts", "failed to list user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset}, err.Error())
+		productServicePtr.Logger.Error(ctx, "ProductService.go", "ListMyProducts", "failed to list user products", utils.LoggerMeta{"user_id": userID.String(), "limit": limit, "offset": offset, "filter_name": filter.Name, "filter_categories": len(filter.CategoryIDs)}, err.Error())
 		return response, err
 	}
 

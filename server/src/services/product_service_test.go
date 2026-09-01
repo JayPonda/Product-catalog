@@ -153,7 +153,7 @@ func TestProductService_ListProducts_HydratesCategories_E2E(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := svc.ListProducts(nil, 10, 0)
+	resp, err := svc.ListProducts(nil, 10, 0, models.ProductFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestProductService_ListMyProducts_Isolated_E2E(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mine, err := svc.ListMyProducts(nil, userID, 10, 0)
+	mine, err := svc.ListMyProducts(nil, userID, 10, 0, models.ProductFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,5 +302,37 @@ func TestProductService_ListMyProducts_Isolated_E2E(t *testing.T) {
 	}
 	if mine.Products[0].Product.Name != "Widget" {
 		t.Errorf("wrong product returned: %+v", mine.Products[0].Product.Name)
+	}
+}
+
+func TestProductService_ListProducts_WithFilters_E2E(t *testing.T) {
+	svc, catRepo := newProductService(t)
+	userID := uuid.New()
+
+	cat, _ := catRepo.CreateCategory(nil, models.Category{Name: "Hardware"})
+	p1, _ := svc.CreateProduct(nil, v1.RequestProduct{Name: "Hammer", Price: 100, StockQuantity: 5}, userID)
+	p2, _ := svc.CreateProduct(nil, v1.RequestProduct{Name: "Nails", Price: 20, StockQuantity: 50}, userID)
+
+	_, _ = svc.LinkCategory(nil, p1.ID, cat.ID)
+
+	// Filter by category
+	resp, err := svc.ListProducts(nil, 10, 0, models.ProductFilter{CategoryIDs: []uuid.UUID{cat.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 1 || len(resp.Products) != 1 || resp.Products[0].Product.ID != p1.ID {
+		t.Fatalf("expected 1 hardware product, got total=%d len=%d", resp.Total, len(resp.Products))
+	}
+	if len(resp.Products[0].Categories) != 1 || resp.Products[0].Categories[0].Name != "hardware" {
+		t.Errorf("expected category hydrated, got: %+v", resp.Products[0].Categories)
+	}
+
+	// Filter by name
+	resp, err = svc.ListProducts(nil, 10, 0, models.ProductFilter{Name: "nail"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 1 || len(resp.Products) != 1 || resp.Products[0].Product.ID != p2.ID {
+		t.Fatalf("expected Nails product, got total=%d len=%d", resp.Total, len(resp.Products))
 	}
 }
