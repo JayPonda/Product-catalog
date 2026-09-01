@@ -68,6 +68,29 @@ describe('network/request', () => {
     })
 
     it.each([
+      ['getProducts', getProducts, '/products'],
+      ['getMyProducts', getMyProducts, '/my-products'],
+    ])('%s sends name and category_ids search filters', async (_name, fn, path) => {
+      fetchMock.mockResolvedValue(jsonResponse({ products: [], total: 0 }))
+
+      await fn(0, 20, { name: 'laptop', categoryIds: ['cat-1', 'cat-2'] })
+
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toBe(
+        `${BACKEND}/api/v1${path}?limit=20&offset=0&name=laptop&category_ids=cat-1%2Ccat-2`,
+      )
+    })
+
+    it('getCategories sends name search filter', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ categories: [], total: 0 }))
+
+      await getCategories(0, 20, { name: 'electronics' })
+
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toBe(`${BACKEND}/api/v1/categories?limit=20&offset=0&name=electronics`)
+    })
+
+    it.each([
       ['getCategories', getCategories],
       ['getProducts', getProducts],
       ['getMyProducts', getMyProducts],

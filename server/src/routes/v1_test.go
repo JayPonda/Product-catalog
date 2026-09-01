@@ -959,3 +959,131 @@ func TestRoutes_CategoryList_DefaultLimit_E2E(t *testing.T) {
 		t.Errorf("default list limit=%d, want 20", list.Limit)
 	}
 }
+
+func TestRoutes_CategoryList_FilterByName_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "cat-filter-test@example.com")
+
+	for _, name := range []string{"Electronics", "Electricals", "Clothing"} {
+		res := ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": name}, cookie)
+		res.Body.Close()
+	}
+
+	var list struct {
+		Categories []struct{ Name string } `json:"categories"`
+		Total      int64                   `json:"total"`
+	}
+
+	// Filter by substring "elect"
+	decodeBody(t, ta.do(t, "GET", "/api/v1/categories?name=elect", nil, ""), &list)
+	if list.Total != 2 || len(list.Categories) != 2 {
+		t.Fatalf("expected 2 categories matching 'elect', got total=%d len=%d", list.Total, len(list.Categories))
+	}
+
+	// Filter by non-matching
+	decodeBody(t, ta.do(t, "GET", "/api/v1/categories?name=nonexistent", nil, ""), &list)
+	if list.Total != 0 || len(list.Categories) != 0 {
+		t.Fatalf("expected 0 categories, got total=%d len=%d", list.Total, len(list.Categories))
+	}
+}
+
+func TestRoutes_ProductList_Filters_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "filter-test@example.com")
+
+	// 1. Create categories
+	var cat1, cat2 struct{ ID, Name string }
+	decodeBody(t, ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": "Gadgets"}, cookie), &cat1)
+	decodeBody(t, ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": "Apparel"}, cookie), &cat2)
+
+	// 2. Create products
+	var p1, p2, p3 struct{ ID, Name string }
+	decodeBody(t, ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Smart Watch", "description": "Gadget watch", "price": 100, "stock_quantity": 5,
+	}, cookie), &p1)
+	decodeBody(t, ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Running Shorts", "description": "Sportswear shorts", "price": 50, "stock_quantity": 10,
+	}, cookie), &p2)
+	decodeBody(t, ta.do(t, "POST", "/api/v1/products", map[string]any{
+		"name": "Smart Glasses", "description": "High tech glasses", "price": 200, "stock_quantity": 2,
+	}, cookie), &p3)
+
+	// Link categories: p1 -> Gadgets, p2 -> Apparel, p3 -> Gadgets & Apparel
+	ta.do(t, "POST", "/api/v1/products/"+p1.ID+"/categories/link", map[string]string{"category_id": cat1.ID}, cookie).Body.Close()
+	ta.do(t, "POST", "/api/v1/products/"+p2.ID+"/categories/link", map[string]string{"category_id": cat2.ID}, cookie).Body.Close()
+	ta.do(t, "POST", "/api/v1/products/"+p3.ID+"/categories/link", map[string]string{"category_id": cat1.ID}, cookie).Body.Close()
+	ta.do(t, "POST", "/api/v1/products/"+p3.ID+"/categories/link", map[string]string{"category_id": cat2.ID}, cookie).Body.Close()
+
+	type productListResp struct {
+		Products []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"products"`
+		Total int64 `json:"total"`
+	}
+
+	// Test A: Name search substring "watch"
+	var resA productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?name=watch", nil, ""), &resA)
+	if resA.Total != 1 || len(resA.Products) != 1 || resA.Products[0].Name != "Smart Watch" {
+		t.Fatalf("expected Smart Watch, got total=%d, len=%d", resA.Total, len(resA.Products))
+	}
+
+	// Test B: Filter by single category (Apparel: p2, p3)
+	var resB productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?category_ids="+cat2.ID, nil, ""), &resB)
+	if resB.Total != 2 || len(resB.Products) != 2 {
+		t.Fatalf("expected 2 apparel products, got total=%d, len=%d", resB.Total, len(resB.Products))
+	}
+
+	// Test C: Filter by multiple categories comma-separated (Gadgets, Apparel: p1, p2, p3)
+	var resC productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?category_ids="+cat1.ID+","+cat2.ID, nil, ""), &resC)
+	if resC.Total != 3 || len(resC.Products) != 3 {
+		t.Fatalf("expected 3 products in Gadgets or Apparel, got total=%d, len=%d", resC.Total, len(resC.Products))
+	}
+
+	// Test D: Filter by multiple categories repeated query params
+	var resD productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?category_ids="+cat1.ID+"&category_ids="+cat2.ID, nil, ""), &resD)
+	if resD.Total != 3 || len(resD.Products) != 3 {
+		t.Fatalf("expected 3 products with repeated category_ids, got total=%d, len=%d", resD.Total, len(resD.Products))
+	}
+
+	// Test E: Name + Category filter (name "Smart" + category Apparel: should match only Smart Glasses)
+	var resE productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?name=smart&category_ids="+cat2.ID, nil, ""), &resE)
+	if resE.Total != 1 || len(resE.Products) != 1 || resE.Products[0].Name != "Smart Glasses" {
+		t.Fatalf("expected Smart Glasses, got total=%d, len=%d", resE.Total, len(resE.Products))
+	}
+
+	// Test F: My Products filter
+	var resF productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/my-products?name=shorts", nil, cookie), &resF)
+	if resF.Total != 1 || len(resF.Products) != 1 || resF.Products[0].Name != "Running Shorts" {
+		t.Fatalf("expected Running Shorts in my-products, got total=%d, len=%d", resF.Total, len(resF.Products))
+	}
+
+	// Test G: Pagination WITH category filter applied (limit=20, offset=0 page 1 vs offset=20 page 2)
+	for i := 1; i <= 21; i++ {
+		var p struct{ ID string }
+		decodeBody(t, ta.do(t, "POST", "/api/v1/products", map[string]any{
+			"name": fmt.Sprintf("Gadget Item %d", i), "description": "desc", "price": 10, "stock_quantity": 1,
+		}, cookie), &p)
+		ta.do(t, "POST", "/api/v1/products/"+p.ID+"/categories/link", map[string]string{"category_id": cat1.ID}, cookie).Body.Close()
+	}
+
+	// Page 1 with cat1 filter: total = 23 (p1, p3 + 21 new), len = 20
+	var page1 productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?limit=20&offset=0&category_ids="+cat1.ID, nil, ""), &page1)
+	if page1.Total != 23 || len(page1.Products) != 20 {
+		t.Fatalf("expected page 1 with filter: total=23, len=20, got total=%d, len=%d", page1.Total, len(page1.Products))
+	}
+
+	// Page 2 with cat1 filter: total = 23, len = 3
+	var page2 productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?limit=20&offset=20&category_ids="+cat1.ID, nil, ""), &page2)
+	if page2.Total != 23 || len(page2.Products) != 3 {
+		t.Fatalf("expected page 2 with filter: total=23, len=3, got total=%d, len=%d", page2.Total, len(page2.Products))
+	}
+}

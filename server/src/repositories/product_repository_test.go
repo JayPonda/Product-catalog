@@ -121,7 +121,7 @@ func TestProductRepo_GetProducts_PaginationAndDelete_E2E(t *testing.T) {
 	bID := mustUUID(t, b)
 	_ = aID
 
-	page, total, err := repo.GetProducts(nil, 2, 0)
+	page, total, err := repo.GetProducts(nil, 2, 0, models.ProductFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestProductRepo_GetProducts_PaginationAndDelete_E2E(t *testing.T) {
 	if _, err := repo.GetProductById(nil, bID); err != sql.ErrNoRows {
 		t.Errorf("deleted product should be invisible, got %v", err)
 	}
-	_, total, _ = repo.GetProducts(nil, 10, 0)
+	_, total, _ = repo.GetProducts(nil, 10, 0, models.ProductFilter{})
 	if total != 2 {
 		t.Errorf("total after delete = %d, want 2", total)
 	}
@@ -163,7 +163,7 @@ func TestProductRepo_GetMyProducts_E2E(t *testing.T) {
 		}
 	}
 
-	list, total, err := repo.GetMyProducts(nil, mine.UUID, 10, 0)
+	list, total, err := repo.GetMyProducts(nil, mine.UUID, 10, 0, models.ProductFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,5 +174,82 @@ func TestProductRepo_GetMyProducts_E2E(t *testing.T) {
 		if p.UserID.UUID != mine.UUID {
 			t.Errorf("leaked foreign product %q", p.Name)
 		}
+	}
+}
+
+func TestProductRepo_GetProducts_Filters_E2E(t *testing.T) {
+	repo := newProductRepo(t)
+	pcRepo, err := repositories.InitProductCategoryRepository(repo.Db, utils.NewStructuredLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catRepo, err := repositories.InitCategoryRepository(repo.Db, utils.NewStructuredLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create categories
+	catElectronics, _ := catRepo.CreateCategory(nil, models.Category{Name: "Electronics"})
+	catBooks, _ := catRepo.CreateCategory(nil, models.Category{Name: "Books"})
+	catClothing, _ := catRepo.CreateCategory(nil, models.Category{Name: "Clothing"})
+
+	// Create products
+	pPhone, _ := repo.CreateProduct(nil, mkProduct("Smartphone Pro"))
+	pLaptop, _ := repo.CreateProduct(nil, mkProduct("Laptop Air"))
+	pNovel, _ := repo.CreateProduct(nil, mkProduct("Sci-Fi Novel"))
+	pShirt, _ := repo.CreateProduct(nil, mkProduct("Cotton Shirt"))
+
+	// Link categories
+	_ = pcRepo.LinkCategory(nil, pPhone.ID, catElectronics.ID)
+	_ = pcRepo.LinkCategory(nil, pLaptop.ID, catElectronics.ID)
+	_ = pcRepo.LinkCategory(nil, pNovel.ID, catBooks.ID)
+	_ = pcRepo.LinkCategory(nil, pShirt.ID, catClothing.ID)
+
+	// 1. Filter by Name (case-insensitive substring)
+	res, total, err := repo.GetProducts(nil, 10, 0, models.ProductFilter{Name: "phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(res) != 1 || res[0].ID != pPhone.ID {
+		t.Fatalf("expected 1 phone product, got total=%d len=%d", total, len(res))
+	}
+
+	// 2. Filter by Single Category
+	res, total, err = repo.GetProducts(nil, 10, 0, models.ProductFilter{CategoryIDs: []uuid.UUID{catElectronics.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(res) != 2 {
+		t.Fatalf("expected 2 electronics products, got total=%d len=%d", total, len(res))
+	}
+
+	// 3. Filter by Multiple Categories (OR semantics)
+	res, total, err = repo.GetProducts(nil, 10, 0, models.ProductFilter{CategoryIDs: []uuid.UUID{catElectronics.ID, catBooks.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(res) != 3 {
+		t.Fatalf("expected 3 products in Electronics or Books, got total=%d len=%d", total, len(res))
+	}
+
+	// 4. Combined Name and Category filter
+	res, total, err = repo.GetProducts(nil, 10, 0, models.ProductFilter{
+		Name:        "air",
+		CategoryIDs: []uuid.UUID{catElectronics.ID, catBooks.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(res) != 1 || res[0].ID != pLaptop.ID {
+		t.Fatalf("expected Laptop Air, got total=%d len=%d", total, len(res))
+	}
+
+	// 5. Non-matching filter returns 0
+	res, total, err = repo.GetProducts(nil, 10, 0, models.ProductFilter{Name: "NonExistent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 0 || len(res) != 0 {
+		t.Fatalf("expected 0 products, got total=%d len=%d", total, len(res))
 	}
 }

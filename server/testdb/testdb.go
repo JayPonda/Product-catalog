@@ -93,6 +93,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_categories_name_active
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active
     ON users(email)
     WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_product_categories_category_id
+    ON product_categories(category_id)
+    WHERE deleted_at IS NULL;
 `
 
 var dbCounter uint64

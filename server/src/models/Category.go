@@ -14,3 +14,7 @@ type Category struct {
 	UpdatedAt time.Time    `json:"updated_at" db:"updated_at"`
 	DeletedAt sql.NullTime `json:"deleted_at" db:"deleted_at"`
 }
+
+type CategoryFilter struct {
+	Name string `json:"name"`
+}

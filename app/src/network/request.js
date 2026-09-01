@@ -115,19 +115,37 @@ async function request(path, { params, rawData, defaultError, method, ...options
   }
 }
 
-export function getCategories(page, limit) {
+export function getCategories(page, limit, { name } = {}) {
   const offset = page * limit
-  return request('/categories', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  return request('/categories', { params })
 }
 
-export function getProducts(page, limit) {
+export function getProducts(page, limit, { name, categoryIds } = {}) {
   const offset = page * limit
-  return request('/products', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  if (categoryIds && categoryIds.length > 0) {
+    params.category_ids = categoryIds.join(',')
+  }
+  return request('/products', { params })
 }
 
-export function getMyProducts(page, limit) {
+export function getMyProducts(page, limit, { name, categoryIds } = {}) {
   const offset = page * limit
-  return request('/my-products', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  if (categoryIds && categoryIds.length > 0) {
+    params.category_ids = categoryIds.join(',')
+  }
+  return request('/my-products', { params })
 }
 
 export function searchCategory(name) {

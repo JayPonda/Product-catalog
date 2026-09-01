@@ -68,7 +68,7 @@ func TestCategoryService_List_PaginationFields(t *testing.T) {
 		}
 	}
 
-	resp, err := svc.ListCategories(nil, 2, 1)
+	resp, err := svc.ListCategories(nil, 2, 1, models.CategoryFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,5 +124,25 @@ func TestCategoryService_Delete(t *testing.T) {
 	}
 	if _, err := svc.GetCategoryById(nil, created.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected ErrNoRows after delete, got %v", err)
+	}
+}
+
+func TestCategoryService_ListCategories_WithFilter_E2E(t *testing.T) {
+	svc := newCategoryService(t)
+	for _, n := range []string{"Appliances", "Apparel", "Hardware"} {
+		if _, err := svc.CreateCategory(nil, models.Category{Name: n}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resp, err := svc.ListCategories(nil, 10, 0, models.CategoryFilter{Name: "app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 2 || len(resp.Categories) != 2 {
+		t.Fatalf("expected 2 categories matching 'app', got total=%d len=%d", resp.Total, len(resp.Categories))
+	}
+	if resp.Categories[0].Name != "apparel" || resp.Categories[1].Name != "appliances" {
+		t.Errorf("unexpected categories: %+v", resp.Categories)
 	}
 }

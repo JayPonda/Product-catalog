@@ -10,10 +10,12 @@ type ResponseProduct struct {
 	Categories []models.Category `json:"categories"`
 }
 
-// ListProductsQuery holds pagination parameters for listing products.
+// ListProductsQuery holds pagination and filter parameters for listing products.
 type ListProductsQuery struct {
-	Limit  int `query:"limit" validate:"omitempty,oneof=20 50 100"`
-	Offset int `query:"offset" validate:"omitempty,min=0"`
+	Limit       int      `query:"limit" validate:"omitempty,oneof=20 50 100"`
+	Offset      int      `query:"offset" validate:"omitempty,min=0"`
+	Name        string   `query:"name" validate:"omitempty,max=100"`
+	CategoryIDs []string `query:"category_ids"`
 }
 
 // ListProductsResponse is the paginated product list payload.

@@ -2,6 +2,7 @@ package controllersv1
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JayPonda/Product-catalog/server/src/models"
 	"github.com/JayPonda/Product-catalog/server/src/services"
@@ -78,8 +79,9 @@ func (cc *CategoryController) MatchCategories(ctx fiber.Ctx) error {
 // @Description  List categories with pagination, alphabetical by name
 // @Tags         categories
 // @Produce      json
-// @Param        limit   query  int  false  "Page size (20|50|100)"  default(20)
-// @Param        offset  query  int  false  "Offset"             default(0)
+// @Param        limit   query  int     false  "Page size (20|50|100)"  default(20)
+// @Param        offset  query  int     false  "Offset"                 default(0)
+// @Param        name    query  string  false  "Category name filter"
 // @Success      200     {object}  v1.ListCategoriesResponse
 // @Failure      400     {object}  map[string]string
 // @Failure      500     {object}  map[string]string
@@ -109,7 +111,11 @@ func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
 		query.Limit = 20
 	}
 
-	response, err := cc.Service.ListCategories(ctx, query.Limit, query.Offset)
+	filter := models.CategoryFilter{
+		Name: strings.TrimSpace(query.Name),
+	}
+
+	response, err := cc.Service.ListCategories(ctx, query.Limit, query.Offset, filter)
 	if err != nil {
 		cc.Logger.Error(ctx, "CategoryController.go", "ListCategories", "service error", utils.LoggerMeta{"error": err.Error()}, "")
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -117,7 +123,7 @@ func (cc *CategoryController) ListCategories(ctx fiber.Ctx) error {
 		})
 	}
 
-	cc.Logger.Debug(ctx, "CategoryController.go", "ListCategories", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset})
+	cc.Logger.Debug(ctx, "CategoryController.go", "ListCategories", "success", utils.LoggerMeta{"limit": query.Limit, "offset": query.Offset, "filter": filter.Name})
 	return ctx.JSON(response)
 }
 
