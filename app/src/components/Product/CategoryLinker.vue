@@ -112,6 +112,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProduct, searchCategory, linkCategory, unlinkCategory } from '@/network/request'
+import { useNotificationStore } from '@/stores/notifications'
 import logger from '@/utils/logger'
 
 const props = defineProps({
@@ -122,6 +123,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['error'])
+const notifications = useNotificationStore()
 
 const categorySearch = ref('')
 const categoryResults = ref([])
@@ -192,6 +194,7 @@ async function unlinkProductCategory(category) {
     })
     savedCategoryIds.value.delete(category.id)
     productCategories.value = productCategories.value.filter((item) => item.id !== category.id)
+    notifications.success(`Category "${category.name}" unlinked.`)
   } else {
     logger.Warn('CategoryLinker.vue', 'unlinkProductCategory', 'failed to unlink category', {
       categoryId: category.id,
@@ -256,6 +259,10 @@ async function addCategories() {
   addingCategories.value = false
   if (failures.length) {
     emit('error', `Could not add: ${failures.join(', ')}`)
+  } else {
+    notifications.success(
+      pending.length === 1 ? 'Category linked successfully.' : 'Categories linked successfully.',
+    )
   }
 }
 

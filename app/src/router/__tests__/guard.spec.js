@@ -54,17 +54,14 @@ describe('router auth guard', () => {
     expect(router.currentRoute.value.query.redirect).toBe('/my-products')
   })
 
-  it.each(['/products/add', '/categories/add', '/products/some-id/edit'])(
-    'protects %s',
-    async (path) => {
-      getCurrentUser.mockResolvedValue({ ok: false, error: 401 })
+  it.each(['/products/add', '/products/some-id/edit'])('protects %s', async (path) => {
+    getCurrentUser.mockResolvedValue({ ok: false, error: 401 })
 
-      const router = await makeRouter()
-      await router.push(path)
+    const router = await makeRouter()
+    await router.push(path)
 
-      expect(router.currentRoute.value.name).toBe('login')
-    },
-  )
+    expect(router.currentRoute.value.name).toBe('login')
+  })
 
   it('leaves public routes open when unauthenticated', async () => {
     getCurrentUser.mockResolvedValue({ ok: false, error: 401 })

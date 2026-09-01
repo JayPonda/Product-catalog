@@ -92,7 +92,7 @@ async function addCategory() {
   if (response.ok) {
     newCategory.value = ''
     await fetchCategories()
-    notifications.success('Category created successfully.')
+    notifications.success('Product category added successfully.')
   } else {
     notifications.show(String(response.error ?? ''))
   }

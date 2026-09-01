@@ -32,9 +32,17 @@ function onError(message) {
   }
 }
 
-function onProductSaved(savedProduct) {
-  logger.Info('ModifyProduct.vue', 'onProductSaved', 'product saved', { id: savedProduct?.id })
-  notifications.success('Product saved successfully.')
+function onProductSaved(savedProduct, isEditParam) {
+  const isEdit = isEditParam !== undefined ? Boolean(isEditParam) : Boolean(productId.value)
+  logger.Info('ModifyProduct.vue', 'onProductSaved', 'product saved', {
+    id: savedProduct?.id,
+    isEdit,
+  })
+  if (isEdit) {
+    notifications.success('Product successfully edited.')
+  } else {
+    notifications.success('Product successfully added.')
+  }
   router.push({
     name: 'products-modify',
     params: { id: savedProduct.id },
