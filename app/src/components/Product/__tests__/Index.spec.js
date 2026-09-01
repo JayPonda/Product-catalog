@@ -416,5 +416,69 @@ describe('Product/Index.vue', () => {
       expect(getMyProducts).toHaveBeenLastCalledWith(0, 20, { name: 'my-item' })
       vi.useRealTimers()
     })
+
+    it('maintains category selection during pagination next and previous', async () => {
+      vi.mocked(getProducts)
+        .mockResolvedValueOnce({ ok: true, data: mockProductData }) // initial mount
+        .mockResolvedValueOnce({
+          ok: true,
+          data: {
+            total: 35,
+            limit: 20,
+            offset: 0,
+            products: [{ id: 'p-1', name: 'Product 1' }],
+          },
+        }) // after category select
+        .mockResolvedValueOnce({
+          ok: true,
+          data: {
+            total: 35,
+            limit: 20,
+            offset: 20,
+            products: [{ id: 'p-21', name: 'Product 21' }],
+          },
+        }) // after next page
+        .mockResolvedValueOnce({
+          ok: true,
+          data: {
+            total: 35,
+            limit: 20,
+            offset: 0,
+            products: [{ id: 'p-1', name: 'Product 1' }],
+          },
+        }) // after prev page
+
+      const wrapper = mount(Index, {
+        props: { myProducts: false, showControls: false },
+      })
+      await flushPromises()
+
+      // Select category
+      const filterBtn = wrapper.find('button[aria-label="Filter by categories"]')
+      await filterBtn.trigger('click')
+      await flushPromises()
+
+      const checkbox = wrapper.find('input[type="checkbox"]')
+      await checkbox.setValue(true)
+      await flushPromises()
+
+      expect(getProducts).toHaveBeenLastCalledWith(0, 20, { categoryIds: ['cat-1'] })
+
+      // Click next page
+      const nextBtn = wrapper.findAll('nav button').find((b) => b.text() === 'Next')
+      await nextBtn?.trigger('click')
+      await flushPromises()
+
+      // Expect page 1 with same category selection
+      expect(getProducts).toHaveBeenLastCalledWith(1, 20, { categoryIds: ['cat-1'] })
+
+      // Click previous page
+      const prevBtn = wrapper.findAll('nav button').find((b) => b.text() === 'Previous')
+      await prevBtn?.trigger('click')
+      await flushPromises()
+
+      // Expect back on page 0 with same category selection
+      expect(getProducts).toHaveBeenLastCalledWith(0, 20, { categoryIds: ['cat-1'] })
+    })
   })
 })

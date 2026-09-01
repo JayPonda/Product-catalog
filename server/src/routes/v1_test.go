@@ -1063,4 +1063,27 @@ func TestRoutes_ProductList_Filters_E2E(t *testing.T) {
 	if resF.Total != 1 || len(resF.Products) != 1 || resF.Products[0].Name != "Running Shorts" {
 		t.Fatalf("expected Running Shorts in my-products, got total=%d, len=%d", resF.Total, len(resF.Products))
 	}
+
+	// Test G: Pagination WITH category filter applied (limit=20, offset=0 page 1 vs offset=20 page 2)
+	for i := 1; i <= 21; i++ {
+		var p struct{ ID string }
+		decodeBody(t, ta.do(t, "POST", "/api/v1/products", map[string]any{
+			"name": fmt.Sprintf("Gadget Item %d", i), "description": "desc", "price": 10, "stock_quantity": 1,
+		}, cookie), &p)
+		ta.do(t, "POST", "/api/v1/products/"+p.ID+"/categories/link", map[string]string{"category_id": cat1.ID}, cookie).Body.Close()
+	}
+
+	// Page 1 with cat1 filter: total = 23 (p1, p3 + 21 new), len = 20
+	var page1 productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?limit=20&offset=0&category_ids="+cat1.ID, nil, ""), &page1)
+	if page1.Total != 23 || len(page1.Products) != 20 {
+		t.Fatalf("expected page 1 with filter: total=23, len=20, got total=%d, len=%d", page1.Total, len(page1.Products))
+	}
+
+	// Page 2 with cat1 filter: total = 23, len = 3
+	var page2 productListResp
+	decodeBody(t, ta.do(t, "GET", "/api/v1/products?limit=20&offset=20&category_ids="+cat1.ID, nil, ""), &page2)
+	if page2.Total != 23 || len(page2.Products) != 3 {
+		t.Fatalf("expected page 2 with filter: total=23, len=3, got total=%d, len=%d", page2.Total, len(page2.Products))
+	}
 }

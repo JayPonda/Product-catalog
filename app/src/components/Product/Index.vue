@@ -457,14 +457,9 @@ function next() {
     notifications.show('Something went wrong')
     return
   }
-  const product = products.value
+  const total = products.value.total ?? 0
 
-  if (
-    product.total !== undefined &&
-    product.limit !== undefined &&
-    product.offset !== undefined &&
-    product.total - product.limit * (product.offset + 1) > 0
-  ) {
+  if ((curruntPage.value + 1) * curruntLimit < total) {
     curruntPage.value = curruntPage.value + 1
     fetchProducts()
   } else {
@@ -477,9 +472,7 @@ function previous() {
     notifications.show('Something went wrong')
     return
   }
-  const product = products.value
-
-  if (product.offset !== undefined && product.offset > 0) {
+  if (curruntPage.value > 0) {
     curruntPage.value = curruntPage.value - 1
     fetchProducts()
   } else {
