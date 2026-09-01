@@ -101,7 +101,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getProducts, getMyProducts, deleteProduct } from '@/network/request.js'
-import { useErrorStore } from '@/stores/errors'
+import { useNotificationStore } from '@/stores/notifications'
 import { EllipsisVertical } from '@lucide/vue'
 import BaseTable from '@/components/table/BaseTable.vue'
 import logger from '@/utils/logger'
@@ -112,7 +112,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const error = useErrorStore()
+const notifications = useNotificationStore()
 
 // Scalar columns to render as plain cells; categories and ownership get their own columns.
 const scalarTitles = computed(() =>
@@ -172,8 +172,10 @@ async function removeProduct(product) {
   })
   if (response.ok) {
     fetchProducts()
+    notifications.success('Product deleted successfully.')
+  } else {
+    notifications.show(response.message || response.error)
   }
-  error.show(String(response.error ?? ''))
 }
 
 async function fetchProducts() {
@@ -191,13 +193,14 @@ async function fetchProducts() {
     }
 
     products.value = response.data
+  } else {
+    notifications.show(response.message || response.error)
   }
-  error.show(String(response.error ?? ''))
 }
 
 function next() {
   if (!products.value) {
-    error.show('Something went wrong')
+    notifications.show('Something went wrong')
     return
   }
   const product = products.value
@@ -211,13 +214,13 @@ function next() {
     curruntPage.value = curruntPage.value + 1
     fetchProducts()
   } else {
-    error.show('No records on next page.')
+    notifications.show('No records on next page.')
   }
 }
 
 function previous() {
   if (!products.value) {
-    error.show('Something went wrong')
+    notifications.show('Something went wrong')
     return
   }
   const product = products.value
@@ -226,7 +229,7 @@ function previous() {
     curruntPage.value = curruntPage.value - 1
     fetchProducts()
   } else {
-    error.show('No records on previous page.')
+    notifications.show('No records on previous page.')
   }
 }
 

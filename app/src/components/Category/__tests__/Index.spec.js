@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import Index from '../Index.vue'
 import { useAuthStore } from '@/stores/auth'
-import { useErrorStore } from '@/stores/errors'
+import { useNotificationStore } from '@/stores/notifications'
 
 vi.mock('@/network/request.js', () => ({
   getCategories: vi.fn(),
@@ -101,7 +101,7 @@ describe('Category/Index.vue', () => {
   it('displays error if new category name is empty', async () => {
     const authStore = useAuthStore()
     authStore.isAuthenticated = true
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
 
     vi.mocked(getCategories).mockResolvedValue({
@@ -152,7 +152,7 @@ describe('Category/Index.vue', () => {
   })
 
   it('displays error if pagination next is clicked on last page', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
 
     vi.mocked(getCategories).mockResolvedValue({
@@ -175,7 +175,7 @@ describe('Category/Index.vue', () => {
   })
 
   it('displays error if pagination previous is clicked on first page', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
 
     vi.mocked(getCategories).mockResolvedValue({
@@ -198,7 +198,7 @@ describe('Category/Index.vue', () => {
   })
 
   it('next displays error if categories ref is falsy', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index)
     await flushPromises()
@@ -210,7 +210,7 @@ describe('Category/Index.vue', () => {
   })
 
   it('previous displays error if categories ref is falsy', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index)
     await flushPromises()

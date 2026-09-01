@@ -57,12 +57,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { getCategories, createCategory } from '@/network/request.js'
 import { useAuthStore } from '@/stores/auth'
-import { useErrorStore } from '@/stores/errors'
+import { useNotificationStore } from '@/stores/notifications'
 import BaseTable from '@/components/table/BaseTable.vue'
 import logger from '@/utils/logger'
 
 const auth = useAuthStore()
-const error = useErrorStore()
+const notifications = useNotificationStore()
 
 const curruntPage = ref(0) // offset
 const curruntLimit = 20
@@ -83,7 +83,7 @@ const addingCategory = ref(false)
 async function addCategory() {
   const name = newCategory.value.trim()
   if (!name) {
-    error.show('Category name is required.')
+    notifications.show('Category name is required.')
     return
   }
   addingCategory.value = true
@@ -92,8 +92,10 @@ async function addCategory() {
   if (response.ok) {
     newCategory.value = ''
     await fetchCategories()
+    notifications.success('Product category added successfully.')
+  } else {
+    notifications.show(response.message || response.error)
   }
-  error.show(String(response.error ?? ''))
 }
 
 async function fetchCategories() {
@@ -110,13 +112,14 @@ async function fetchCategories() {
     }
 
     categories.value = response.data
+  } else {
+    notifications.show(response.message || response.error)
   }
-  error.show(String(response.error ?? ''))
 }
 
 function next() {
   if (!categories.value) {
-    error.show('Something went wrong')
+    notifications.show('Something went wrong')
     return
   }
   if (
@@ -126,20 +129,20 @@ function next() {
     curruntPage.value = curruntPage.value + 1
     fetchCategories()
   } else {
-    error.show('No records on next page.')
+    notifications.show('No records on next page.')
   }
 }
 
 function previous() {
   if (!categories.value) {
-    error.show('Something went wrong')
+    notifications.show('Something went wrong')
     return
   }
   if (curruntPage.value > 0) {
     curruntPage.value = curruntPage.value - 1
     fetchCategories()
   } else {
-    error.show('No records on previous page.')
+    notifications.show('No records on previous page.')
   }
 }
 

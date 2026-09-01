@@ -23,7 +23,6 @@ function waitForElement(selector, timeout = 1000) {
 
 import Home from '@/views/Home.vue'
 import Category from '@/views/Category.vue'
-import ModifyCategory from '@/components/Category/ModifyCategory.vue'
 import Product from '@/views/Product.vue'
 import MyProducts from '@/views/MyProducts.vue'
 import ModifyProduct from '@/views/ModifyProduct.vue'
@@ -38,11 +37,6 @@ const router = createRouter({
       path: '/categories',
       name: 'categories',
       component: Category,
-    },
-    {
-      path: '/categories/add',
-      name: 'categories-add',
-      component: ModifyCategory,
     },
     {
       path: '/products',
@@ -103,7 +97,6 @@ router.beforeEach(async (to) => {
   const isProtected =
     to.path === '/products/add' ||
     to.path === '/my-products' ||
-    to.path === '/categories/add' ||
     /^\/products\/[^/]+\/edit$/.test(to.path)
 
   if (isProtected && !auth.isAuthenticated) {

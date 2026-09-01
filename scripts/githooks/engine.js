@@ -61,6 +61,10 @@ class Engine {
       }
     }
 
+    if (result.error) {
+      this.logln(`❌ Command execution error: ${result.error.message}`);
+    }
+
     return result.status === 0;
   }
 
@@ -174,6 +178,7 @@ class Engine {
         }
 
         // Gather files matching task filters
+        const dirPath = task.dir ? path.resolve(task.dir) : process.cwd();
         const matched = [];
         for (const file of files) {
           if (task.dir) {
@@ -183,7 +188,9 @@ class Engine {
 
           if (this.matchPattern(file, task.pattern)) {
             const relPath = task.dir ? file.substring(task.dir.length + 1) : file;
-            matched.push(relPath);
+            if (fs.existsSync(path.resolve(dirPath, relPath))) {
+              matched.push(relPath);
+            }
           }
         }
 
@@ -196,7 +203,6 @@ class Engine {
         const dirName = task.dir || 'root';
         this.logln(`🏃 Running task: ${task.name} (${matched.length} files matched in '${dirName}')...`);
 
-        const dirPath = task.dir ? path.resolve(task.dir) : process.cwd();
         const checkFn = task.check || this.plugins[task.pluginName];
 
         if (!checkFn) {
@@ -249,7 +255,7 @@ class Engine {
 function getStagedFiles(args = []) {
   if (args.length > 0) return args;
 
-  const result = spawnSync('git', ['diff', '--cached', '--name-only', '--diff-filter=ACM']);
+  const result = spawnSync('git', ['diff', '--cached', '--name-only', '--diff-filter=d']);
   if (result.status !== 0) throw new Error(result.stderr ? result.stderr.toString() : 'failed to run git diff');
   return parseLines(result.stdout.toString());
 }
@@ -257,15 +263,15 @@ function getStagedFiles(args = []) {
 // Helper: Query files changed in current branch compared to remote tracking branch (useful for pre-push)
 function getBranchChangedFiles() {
   // 1. Try to diff against upstream branch
-  let result = spawnSync('git', ['diff', '--name-only', '@{u}...HEAD']);
+  let result = spawnSync('git', ['diff', '--name-only', '--diff-filter=d', '@{u}...HEAD']);
   if (result.status === 0) return parseLines(result.stdout.toString());
 
   // 2. Fallback: diff against local main branch
-  result = spawnSync('git', ['diff', '--name-only', 'main...HEAD']);
+  result = spawnSync('git', ['diff', '--name-only', '--diff-filter=d', 'main...HEAD']);
   if (result.status === 0) return parseLines(result.stdout.toString());
 
   // 3. Fallback: diff against origin/main
-  result = spawnSync('git', ['diff', '--name-only', 'origin/main...HEAD']);
+  result = spawnSync('git', ['diff', '--name-only', '--diff-filter=d', 'origin/main...HEAD']);
   if (result.status === 0) return parseLines(result.stdout.toString());
 
   // 4. Fallback: list all tracked files in repository to force checking everything

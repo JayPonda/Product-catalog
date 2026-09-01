@@ -16,6 +16,35 @@ function buildUrl(path, params) {
   return finalUrl.toString()
 }
 
+function getStatusMessage(status) {
+  switch (status) {
+    case 400:
+      return 'Bad request.'
+    case 401:
+      return 'Unauthorized.'
+    case 403:
+      return 'Access forbidden.'
+    case 404:
+      return 'Resource not found.'
+    case 409:
+      return 'Conflict.'
+    case 422:
+      return 'Validation error.'
+    case 429:
+      return 'Too many requests. Please try again later.'
+    case 500:
+      return 'Internal server error. Please try again later.'
+    case 502:
+      return 'Bad gateway. Please try again later.'
+    case 503:
+      return 'Service unavailable. Please try again later.'
+    case 504:
+      return 'Gateway timeout. Please try again later.'
+    default:
+      return 'Something went wrong.'
+  }
+}
+
 async function request(path, { params, rawData, defaultError, method, ...options } = {}) {
   const httpMethod = method || 'GET'
   const url = buildUrl(path, params)
@@ -32,25 +61,41 @@ async function request(path, { params, rawData, defaultError, method, ...options
     const correlationId = response.headers.get('X-Request-ID')
 
     if (!response.ok) {
-      if (defaultError === undefined) {
-        logger.Warn(
-          'request.js',
-          'request',
-          `${httpMethod} ${path} failed`,
-          { status: response.status },
-          correlationId,
-        )
-        return { ok: false, error: response.status }
+      let body = null
+      try {
+        body = await response.json()
+      } catch {
+        try {
+          const text = await response.text()
+          if (text && !text.trim().startsWith('<')) {
+            body = text.trim()
+          }
+        } catch {
+          body = null
+        }
       }
-      const body = await response.json().catch(() => ({}))
+
+      let backendMessage = ''
+      if (typeof body === 'object' && body !== null) {
+        backendMessage =
+          (typeof body.message === 'string' && body.message.trim()) ||
+          (typeof body.error === 'string' && body.error.trim()) ||
+          (typeof body.details === 'string' && body.details.trim()) ||
+          ''
+      } else if (typeof body === 'string') {
+        backendMessage = body.trim()
+      }
+
+      const message = backendMessage || defaultError || getStatusMessage(response.status)
+
       logger.Warn(
         'request.js',
         'request',
         `${httpMethod} ${path} failed`,
-        { status: response.status, message: body.error ?? defaultError },
+        { status: response.status, message },
         correlationId,
       )
-      return { ok: false, error: response.status, message: body.error ?? defaultError }
+      return { ok: false, error: response.status, message }
     }
 
     if (rawData !== undefined) {

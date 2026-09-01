@@ -1,8 +1,14 @@
+const fs = require('fs');
+const path = require('path');
 const { spawnSync } = require('child_process');
 
 module.exports = (engine) => {
   engine.registerPlugin('gofmt', (e, dir, files) => {
-    const result = spawnSync('gofmt', ['-l', ...files], { cwd: dir });
+    const existingFiles = files.filter(file => fs.existsSync(path.resolve(dir, file)));
+    if (existingFiles.length === 0) {
+      return;
+    }
+    const result = spawnSync('gofmt', ['-l', ...existingFiles], { cwd: dir });
     if (result.status !== 0) {
       throw new Error(`gofmt command failed: ${result.stderr ? result.stderr.toString() : ''}`);
     }

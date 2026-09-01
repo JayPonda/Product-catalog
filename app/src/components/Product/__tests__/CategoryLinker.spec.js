@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import CategoryLinker from '../CategoryLinker.vue'
 
 vi.mock('@/network/request', () => ({
@@ -10,11 +11,13 @@ vi.mock('@/network/request', () => ({
 }))
 
 import { getProduct, searchCategory, linkCategory, unlinkCategory } from '@/network/request'
+import { useNotificationStore } from '@/stores/notifications'
 
 describe('CategoryLinker.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
+    setActivePinia(createPinia())
   })
 
   afterEach(() => {
@@ -150,12 +153,16 @@ describe('CategoryLinker.vue', () => {
     await wrapper.find('ul button').trigger('mousedown')
     await flushPromises()
 
+    const notificationStore = useNotificationStore()
+    vi.spyOn(notificationStore, 'success')
+
     const linkBtn = wrapper.find('button.bg-emerald-700')
     expect(linkBtn.exists()).toBe(true)
     await linkBtn.trigger('click')
     await flushPromises()
 
     expect(linkCategory).toHaveBeenCalledWith('p-1', 'cat-2')
+    expect(notificationStore.success).toHaveBeenCalledWith('Category linked successfully.')
   })
 
   it('emits error when getProduct API fails on init', async () => {

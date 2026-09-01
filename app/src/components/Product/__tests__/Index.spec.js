@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import Index from '../Index.vue'
-import { useErrorStore } from '@/stores/errors'
+import { useNotificationStore } from '@/stores/notifications'
 
 // Mock router
 const mockPush = vi.fn()
@@ -195,7 +195,7 @@ describe('Product/Index.vue', () => {
   })
 
   it('displays error if pagination next is clicked on last page', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
 
     vi.mocked(getProducts).mockResolvedValue({
@@ -220,7 +220,7 @@ describe('Product/Index.vue', () => {
   })
 
   it('displays error if pagination previous is clicked on first page', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
 
     vi.mocked(getProducts).mockResolvedValue({
@@ -245,7 +245,7 @@ describe('Product/Index.vue', () => {
   })
 
   it('next displays error if products ref is falsy', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index, {
       props: { myProducts: false, showControls: false },
@@ -259,7 +259,7 @@ describe('Product/Index.vue', () => {
   })
 
   it('previous displays error if products ref is falsy', async () => {
-    const errorStore = useErrorStore()
+    const errorStore = useNotificationStore()
     vi.spyOn(errorStore, 'show')
     const wrapper = mount(Index, {
       props: { myProducts: false, showControls: false },
