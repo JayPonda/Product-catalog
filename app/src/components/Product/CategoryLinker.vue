@@ -165,13 +165,14 @@ async function fetchLinkedCategories() {
         count: productCategories.value.length,
       })
     } else {
+      const errMsg = response.message || String(response.error ?? '')
       logger.Warn(
         'CategoryLinker.vue',
         'fetchLinkedCategories',
         'failed to load linked categories',
-        { error: String(response.error ?? '') },
+        { error: errMsg },
       )
-      emit('error', String(response.error ?? ''))
+      emit('error', errMsg)
     }
   }
 }
@@ -196,11 +197,12 @@ async function unlinkProductCategory(category) {
     productCategories.value = productCategories.value.filter((item) => item.id !== category.id)
     notifications.success(`Category "${category.name}" unlinked.`)
   } else {
+    const errMsg = data.message || String(data.error ?? '')
     logger.Warn('CategoryLinker.vue', 'unlinkProductCategory', 'failed to unlink category', {
       categoryId: category.id,
-      error: String(data.error ?? ''),
+      error: errMsg,
     })
-    emit('error', String(data.error ?? ''))
+    emit('error', errMsg)
   }
 }
 

@@ -174,7 +174,7 @@ async function removeProduct(product) {
     fetchProducts()
     notifications.success('Product deleted successfully.')
   } else {
-    notifications.show(String(response.error ?? ''))
+    notifications.show(response.message || response.error)
   }
 }
 
@@ -193,8 +193,9 @@ async function fetchProducts() {
     }
 
     products.value = response.data
+  } else {
+    notifications.show(response.message || response.error)
   }
-  notifications.show(String(response.error ?? ''))
 }
 
 function next() {

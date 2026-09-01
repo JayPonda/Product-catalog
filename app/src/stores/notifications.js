@@ -7,6 +7,54 @@ const DEFAULT_ERROR_MESSAGE = 'Something went wrong.'
 const DEFAULT_DURATION = 4000
 const DEFAULT_ERROR_DURATION = 5000
 
+const STATUS_CODE_MESSAGES = {
+  400: 'Bad request.',
+  401: 'Unauthorized.',
+  403: 'Access forbidden.',
+  404: 'Resource not found.',
+  409: 'Conflict.',
+  422: 'Validation error.',
+  429: 'Too many requests. Please try again later.',
+  500: 'Internal server error. Please try again later.',
+  502: 'Bad gateway. Please try again later.',
+  503: 'Service unavailable. Please try again later.',
+  504: 'Gateway timeout. Please try again later.',
+}
+
+function resolveErrorMessage(raw) {
+  if (raw === null || raw === undefined || raw === '') {
+    return ''
+  }
+
+  if (raw instanceof Error) {
+    return DEFAULT_ERROR_MESSAGE
+  }
+
+  let text = ''
+  if (typeof raw === 'object' && raw !== null) {
+    text =
+      (typeof raw.message === 'string' && raw.message) ||
+      (typeof raw.error === 'string' && raw.error) ||
+      ''
+    if (!text && typeof raw.error === 'number') {
+      text = STATUS_CODE_MESSAGES[raw.error] || DEFAULT_ERROR_MESSAGE
+    }
+  } else {
+    text = String(raw)
+  }
+
+  const trimmed = text.trim()
+  if (STATUS_CODE_MESSAGES[trimmed]) {
+    return STATUS_CODE_MESSAGES[trimmed]
+  }
+
+  if (/^\d{3}$/.test(trimmed)) {
+    return DEFAULT_ERROR_MESSAGE
+  }
+
+  return text
+}
+
 export const useNotificationStore = defineStore('notifications', () => {
   const currentMessage = ref('')
   const notifications = ref([])
@@ -100,7 +148,8 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   function error(msg, options = {}) {
     const opts = typeof options === 'number' ? { duration: options } : options
-    return add({ message: msg, type: 'error', ...opts })
+    const text = resolveErrorMessage(msg) || DEFAULT_ERROR_MESSAGE
+    return add({ message: text, type: 'error', ...opts })
   }
 
   function success(msg, options = {}) {
@@ -125,18 +174,12 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   function show(raw, type = 'error', options = {}) {
     const opts = typeof options === 'number' ? { duration: options } : options
-    if (typeof raw === 'string') {
-      if (!raw.trim()) {
-        clear()
-        return null
-      }
-      return notify(raw, type, opts)
-    }
-    if (raw === null || raw === undefined || raw === '') {
+    const text = resolveErrorMessage(raw)
+    if (!text) {
       clear()
       return null
     }
-    return error(DEFAULT_ERROR_MESSAGE, opts)
+    return notify(text, type, opts)
   }
 
   return {

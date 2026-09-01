@@ -79,6 +79,35 @@ describe('network/request', () => {
       expect(res.ok).toBe(false)
       expect(res.error).toBe(500)
     })
+
+    it('surfaces backend message on 500 status', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ message: 'Database connection failed' }, 500))
+
+      const res = await getProducts(0, 20)
+
+      expect(res.ok).toBe(false)
+      expect(res.error).toBe(500)
+      expect(res.message).toBe('Database connection failed')
+    })
+
+    it('surfaces backend message on 429 status', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ message: 'Rate limit exceeded' }, 429))
+
+      const res = await getProducts(0, 20)
+
+      expect(res.ok).toBe(false)
+      expect(res.error).toBe(429)
+      expect(res.message).toBe('Rate limit exceeded')
+    })
+
+    it('falls back to friendly status text when backend message is omitted', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({}, 500))
+
+      const res = await getProducts(0, 20)
+
+      expect(res.ok).toBe(false)
+      expect(res.message).toBe('Internal server error. Please try again later.')
+    })
   })
 
   describe('category writes', () => {

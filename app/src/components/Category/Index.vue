@@ -94,7 +94,7 @@ async function addCategory() {
     await fetchCategories()
     notifications.success('Product category added successfully.')
   } else {
-    notifications.show(String(response.error ?? ''))
+    notifications.show(response.message || response.error)
   }
 }
 
@@ -112,8 +112,9 @@ async function fetchCategories() {
     }
 
     categories.value = response.data
+  } else {
+    notifications.show(response.message || response.error)
   }
-  notifications.show(String(response.error ?? ''))
 }
 
 function next() {

@@ -137,5 +137,20 @@ describe('notifications store', () => {
     // Empty string clears
     store.show('')
     expect(store.notifications).toHaveLength(0)
+
+    // Status code translations (500 and 429)
+    store.show(500)
+    expect(store.message).toBe('Internal server error. Please try again later.')
+
+    store.show('429')
+    expect(store.message).toBe('Too many requests. Please try again later.')
+
+    // Backend error object with message
+    store.show({ message: 'Custom rate limit message' })
+    expect(store.message).toBe('Custom rate limit message')
+
+    // Backend error object with error field
+    store.show({ error: 'Backend error string' })
+    expect(store.message).toBe('Backend error string')
   })
 })

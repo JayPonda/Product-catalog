@@ -128,10 +128,11 @@ async function fetchProductInformation() {
     })
     const data = await getProduct(props.productId)
     if (!data.ok) {
+      const errMsg = data.message || String(data.error ?? '')
       logger.Warn('ProductForm.vue', 'fetchProductInformation', 'failed to load product', {
-        error: String(data.error ?? ''),
+        error: errMsg,
       })
-      emit('error', String(data.error ?? ''))
+      emit('error', errMsg)
       return
     }
     formData.name = data.data.name ?? ''
@@ -220,10 +221,11 @@ async function saveProduct() {
   }
 
   if (!response.ok) {
+    const errMsg = response.message || String(response.error ?? '')
     logger.Warn('ProductForm.vue', 'saveProduct', 'failed to save product', {
-      error: String(response.error ?? ''),
+      error: errMsg,
     })
-    emit('error', String(response.error ?? ''))
+    emit('error', errMsg)
     return
   }
 
