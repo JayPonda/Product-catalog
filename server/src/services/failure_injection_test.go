@@ -401,7 +401,7 @@ func TestCategoryService_ListCategories_RepoFailure(t *testing.T) {
 	svc, mock := newCategoryServiceMock(t)
 	mock.ExpectQuery(`FROM .categories.`).WillReturnError(errBoom)
 
-	_, err := svc.ListCategories(nil, 20, 0)
+	_, err := svc.ListCategories(nil, 20, 0, models.CategoryFilter{})
 	wantErr(t, err, "ListCategories")
 }
 

@@ -960,6 +960,33 @@ func TestRoutes_CategoryList_DefaultLimit_E2E(t *testing.T) {
 	}
 }
 
+func TestRoutes_CategoryList_FilterByName_E2E(t *testing.T) {
+	ta := newTestApp(t)
+	cookie := ta.loginAs(t, "cat-filter-test@example.com")
+
+	for _, name := range []string{"Electronics", "Electricals", "Clothing"} {
+		res := ta.do(t, "POST", "/api/v1/categories", map[string]string{"name": name}, cookie)
+		res.Body.Close()
+	}
+
+	var list struct {
+		Categories []struct{ Name string } `json:"categories"`
+		Total      int64                   `json:"total"`
+	}
+
+	// Filter by substring "elect"
+	decodeBody(t, ta.do(t, "GET", "/api/v1/categories?name=elect", nil, ""), &list)
+	if list.Total != 2 || len(list.Categories) != 2 {
+		t.Fatalf("expected 2 categories matching 'elect', got total=%d len=%d", list.Total, len(list.Categories))
+	}
+
+	// Filter by non-matching
+	decodeBody(t, ta.do(t, "GET", "/api/v1/categories?name=nonexistent", nil, ""), &list)
+	if list.Total != 0 || len(list.Categories) != 0 {
+		t.Fatalf("expected 0 categories, got total=%d len=%d", list.Total, len(list.Categories))
+	}
+}
+
 func TestRoutes_ProductList_Filters_E2E(t *testing.T) {
 	ta := newTestApp(t)
 	cookie := ta.loginAs(t, "filter-test@example.com")

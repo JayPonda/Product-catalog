@@ -135,17 +135,25 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategoryByNames(ctx utils.Re
 	return category, nil
 }
 
-func (CategoryRepositoryPtr *CategoryRepository) GetCategories(ctx utils.RequestContext, limit int, offset int, exec ...utils.Executor) ([]models.Category, int64, error) {
+func (CategoryRepositoryPtr *CategoryRepository) GetCategories(ctx utils.RequestContext, limit int, offset int, filter models.CategoryFilter, exec ...utils.Executor) ([]models.Category, int64, error) {
 	db := utils.ResolveExecutor(CategoryRepositoryPtr.Db, exec)
 	l := CategoryRepositoryPtr.Logger
+
+	var conditions []goqu.Expression
+	conditions = append(conditions, goqu.C("deleted_at").IsNull())
+
+	trimmedName := strings.TrimSpace(filter.Name)
+	if trimmedName != "" {
+		escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+		pattern := "%" + escaper.Replace(strings.ToLower(trimmedName)) + "%"
+		conditions = append(conditions, goqu.L("LOWER(name) LIKE ?", pattern))
+	}
 
 	var categories []models.Category
 
 	err := db.
 		From(CATEGORY_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-		).
+		Where(conditions...).
 		Order(goqu.I("name").Asc()).
 		Limit(uint(limit)).
 		Offset(uint(offset)).
@@ -159,7 +167,7 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategories(ctx utils.Request
 		ScanStructs(&categories)
 
 	if err != nil {
-		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to query categories", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to query categories", utils.LoggerMeta{"limit": limit, "offset": offset, "filter": filter.Name}, err.Error())
 		return nil, 0, err
 	}
 
@@ -167,18 +175,16 @@ func (CategoryRepositoryPtr *CategoryRepository) GetCategories(ctx utils.Request
 
 	_, err = db.
 		From(CATEGORY_DB).
-		Where(
-			goqu.C("deleted_at").IsNull(),
-		).
+		Where(conditions...).
 		Select(goqu.COUNT("*")).
 		ScanVal(&total)
 
 	if err != nil {
-		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to count categories", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		l.Error(ctx, "CategoryRepository.go", "GetCategories", "failed to count categories", utils.LoggerMeta{"limit": limit, "offset": offset, "filter": filter.Name}, err.Error())
 		return nil, 0, err
 	}
 
-	l.Debug(ctx, "CategoryRepository.go", "GetCategories", "categories retrieved", utils.LoggerMeta{"limit": limit, "offset": offset, "count": len(categories), "total": total})
+	l.Debug(ctx, "CategoryRepository.go", "GetCategories", "categories retrieved", utils.LoggerMeta{"limit": limit, "offset": offset, "filter": filter.Name, "count": len(categories), "total": total})
 	return categories, total, nil
 }
 

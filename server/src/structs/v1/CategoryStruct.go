@@ -18,8 +18,9 @@ type LinkCategoryRequest struct {
 
 // ListCategoriesQuery holds pagination parameters for listing categories.
 type ListCategoriesQuery struct {
-	Limit  int `query:"limit" validate:"omitempty,oneof=20 50 100"`
-	Offset int `query:"offset" validate:"omitempty,min=0"`
+	Limit  int    `query:"limit" validate:"omitempty,oneof=20 50 100"`
+	Offset int    `query:"offset" validate:"omitempty,min=0"`
+	Name   string `query:"name" validate:"omitempty,max=50"`
 }
 
 // ListCategoriesResponse is the paginated category list payload.

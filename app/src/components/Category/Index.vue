@@ -1,28 +1,64 @@
 <template>
   <div class="space-y-6">
-    <!-- inline add: type a name and add without leaving the page (authenticated users only) -->
-    <div class="flex items-end justify-end gap-2" v-if="auth.isAuthenticated">
-      <div>
-        <label for="new-category" class="block text-sm font-medium text-gray-700"
-          >New category</label
+    <!-- Toolbar: Search by category name, reset, and inline add category (for auth users) -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-1 items-center gap-3">
+        <!-- Search by category name -->
+        <div class="relative w-full sm:w-64">
+          <Search
+            class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Search categories..."
+            aria-label="Search categories by name"
+            class="w-full rounded-md border border-gray-300 py-2 pl-9 pr-8 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          />
+          <button
+            v-if="searchQuery"
+            @click="clearSearch"
+            type="button"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+            aria-label="Clear search"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+
+        <!-- Reset filter button -->
+        <button
+          v-if="searchQuery"
+          @click="clearSearch"
+          type="button"
+          class="text-xs font-medium text-gray-500 underline hover:text-gray-800"
         >
-        <input
-          id="new-category"
-          type="text"
-          v-model="newCategory"
-          @keyup.enter="addCategory"
-          placeholder="Category name"
-          class="mt-1 block w-64 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-        />
+          Reset
+        </button>
       </div>
-      <button
-        type="button"
-        @click="addCategory"
-        :disabled="addingCategory"
-        class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
-      >
-        Add
-      </button>
+
+      <!-- inline add: type a name and add without leaving the page (authenticated users only) -->
+      <div class="flex items-center gap-2" v-if="auth.isAuthenticated">
+        <div>
+          <label for="new-category" class="sr-only">New category</label>
+          <input
+            id="new-category"
+            type="text"
+            v-model="newCategory"
+            @keyup.enter="addCategory"
+            placeholder="Category name"
+            class="block w-64 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          />
+        </div>
+        <button
+          type="button"
+          @click="addCategory"
+          :disabled="addingCategory"
+          class="rounded-md bg-emerald-700 px-4 py-2 font-bold text-white transition-colors hover:bg-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
     </div>
 
     <!-- table showing the results -->
@@ -48,16 +84,15 @@
         Next
       </button>
     </nav>
-
-    <!-- error alert -->
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { getCategories, createCategory } from '@/network/request.js'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { Search, X } from '@lucide/vue'
 import BaseTable from '@/components/table/BaseTable.vue'
 import logger from '@/utils/logger'
 
@@ -67,7 +102,7 @@ const notifications = useNotificationStore()
 const curruntPage = ref(0) // offset
 const curruntLimit = 20
 const categories = ref({})
-const categoryTableTitle = ref([])
+const categoryTableTitle = ref(['id', 'name'])
 const scalarCategoryTitles = computed(() =>
   categoryTableTitle.value.filter((t) => t !== 'deleted_at'),
 )
@@ -79,6 +114,25 @@ const columns = computed(() =>
 )
 const newCategory = ref('')
 const addingCategory = ref(false)
+
+// Search state
+const searchQuery = ref('')
+let searchDebounceTimer = undefined
+
+function clearSearch() {
+  searchQuery.value = ''
+  clearTimeout(searchDebounceTimer)
+  curruntPage.value = 0
+  fetchCategories()
+}
+
+watch(searchQuery, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = window.setTimeout(() => {
+    curruntPage.value = 0
+    fetchCategories()
+  }, 300)
+})
 
 async function addCategory() {
   const name = newCategory.value.trim()
@@ -99,14 +153,23 @@ async function addCategory() {
 }
 
 async function fetchCategories() {
-  const response = await getCategories(curruntPage.value, curruntLimit)
+  const filterOptions = {}
+  if (searchQuery.value.trim()) {
+    filterOptions.name = searchQuery.value.trim()
+  }
+
+  const response =
+    Object.keys(filterOptions).length > 0
+      ? await getCategories(curruntPage.value, curruntLimit, filterOptions)
+      : await getCategories(curruntPage.value, curruntLimit)
+
   logger.Debug('Category/Index.vue', 'fetchCategories', 'fetch response', {
     ok: response.ok,
     data: response.data,
   })
   if (response.ok) {
     if (response.data?.categories?.length > 0) {
-      const keys = Object.keys(response.data?.categories[0])
+      const keys = Object.keys(response.data.categories[0])
       logger.Debug('Category/Index.vue', 'fetchCategories', 'column keys', { keys })
       categoryTableTitle.value = keys
     }
@@ -147,4 +210,8 @@ function previous() {
 }
 
 onMounted(fetchCategories)
+
+onBeforeUnmount(() => {
+  clearTimeout(searchDebounceTimer)
+})
 </script>

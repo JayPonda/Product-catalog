@@ -115,9 +115,13 @@ async function request(path, { params, rawData, defaultError, method, ...options
   }
 }
 
-export function getCategories(page, limit) {
+export function getCategories(page, limit, { name } = {}) {
   const offset = page * limit
-  return request('/categories', { params: { limit, offset } })
+  const params = { limit, offset }
+  if (name && name.trim()) {
+    params.name = name.trim()
+  }
+  return request('/categories', { params })
 }
 
 export function getProducts(page, limit, { name, categoryIds } = {}) {

@@ -69,7 +69,7 @@ func TestCategoryRepo_GetCategories_Pagination_E2E(t *testing.T) {
 	repo := newCategoryRepo(t)
 	seedCategories(t, repo, "alpha", "beta", "gamma", "delta")
 
-	page, total, err := repo.GetCategories(nil, 2, 0)
+	page, total, err := repo.GetCategories(nil, 2, 0, models.CategoryFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCategoryRepo_GetCategories_Pagination_E2E(t *testing.T) {
 		t.Errorf("expected alpha,beta got %q,%q", page[0].Name, page[1].Name)
 	}
 
-	page2, _, _ := repo.GetCategories(nil, 2, 2)
+	page2, _, _ := repo.GetCategories(nil, 2, 2, models.CategoryFilter{})
 	if len(page2) != 2 || page2[0].Name != "delta" || page2[1].Name != "gamma" {
 		t.Errorf("unexpected page2: %v", page2)
 	}
@@ -177,8 +177,44 @@ func TestCategoryRepo_Delete_HidesCategory_E2E(t *testing.T) {
 	if _, err := repo.GetCategoryById(nil, seeded[0].ID); err != sql.ErrNoRows {
 		t.Errorf("deleted category should be invisible, got %v", err)
 	}
-	_, total, _ := repo.GetCategories(nil, 10, 0)
+	_, total, _ := repo.GetCategories(nil, 10, 0, models.CategoryFilter{})
 	if total != 0 {
 		t.Errorf("deleted category still counted, total=%d", total)
+	}
+}
+
+func TestCategoryRepo_GetCategories_FilterByName_E2E(t *testing.T) {
+	repo := newCategoryRepo(t)
+	seedCategories(t, repo, "Electronics", "Electrical Supplies", "Clothing", "Home & Kitchen")
+
+	// Substring match case-insensitive "elect"
+	page, total, err := repo.GetCategories(nil, 10, 0, models.CategoryFilter{Name: "elect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(page) != 2 {
+		t.Fatalf("expected 2 categories matching 'elect', got total=%d len=%d", total, len(page))
+	}
+	// alphabetical order
+	if page[0].Name != "electrical supplies" || page[1].Name != "electronics" {
+		t.Errorf("unexpected results: %v, %v", page[0].Name, page[1].Name)
+	}
+
+	// Substring match "cloth"
+	page, total, err = repo.GetCategories(nil, 10, 0, models.CategoryFilter{Name: "cloth"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(page) != 1 || page[0].Name != "clothing" {
+		t.Fatalf("expected clothing, got total=%d len=%d", total, len(page))
+	}
+
+	// Non-matching
+	page, total, err = repo.GetCategories(nil, 10, 0, models.CategoryFilter{Name: "nonexistent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 0 || len(page) != 0 {
+		t.Fatalf("expected 0, got total=%d len=%d", total, len(page))
 	}
 }

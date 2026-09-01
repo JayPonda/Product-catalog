@@ -31,12 +31,12 @@ func (categoryServicePtr *CategoryService) GetCategoryByNames(ctx utils.RequestC
 	return categoryServicePtr.CategoryManager.GetCategoryByNames(ctx, names)
 }
 
-func (categoryServicePtr *CategoryService) ListCategories(ctx utils.RequestContext, limit int, offset int) (v1.ListCategoriesResponse, error) {
+func (categoryServicePtr *CategoryService) ListCategories(ctx utils.RequestContext, limit int, offset int, filter models.CategoryFilter) (v1.ListCategoriesResponse, error) {
 	var response v1.ListCategoriesResponse
 
-	categories, total, err := categoryServicePtr.CategoryManager.GetCategories(ctx, limit, offset)
+	categories, total, err := categoryServicePtr.CategoryManager.GetCategories(ctx, limit, offset, filter)
 	if err != nil {
-		categoryServicePtr.Logger.Error(ctx, "CategoryService.go", "ListCategories", "failed to list categories", utils.LoggerMeta{"limit": limit, "offset": offset}, err.Error())
+		categoryServicePtr.Logger.Error(ctx, "CategoryService.go", "ListCategories", "failed to list categories", utils.LoggerMeta{"limit": limit, "offset": offset, "filter": filter.Name}, err.Error())
 		return response, err
 	}
 
@@ -45,7 +45,7 @@ func (categoryServicePtr *CategoryService) ListCategories(ctx utils.RequestConte
 	response.Limit = limit
 	response.Offset = offset
 
-	categoryServicePtr.Logger.Debug(ctx, "CategoryService.go", "ListCategories", "categories listed", utils.LoggerMeta{"count": len(categories), "total": total})
+	categoryServicePtr.Logger.Debug(ctx, "CategoryService.go", "ListCategories", "categories listed", utils.LoggerMeta{"count": len(categories), "total": total, "filter": filter.Name})
 	return response, nil
 }
 

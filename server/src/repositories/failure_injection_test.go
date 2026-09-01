@@ -84,7 +84,7 @@ func TestCategoryRepo_GetCategories_ScanFailure(t *testing.T) {
 	repo, _ := repositories.InitCategoryRepository(gdb, utils.NewStructuredLogger())
 	mock.ExpectQuery(`FROM .categories.`).WillReturnError(mockErr)
 
-	if _, _, err := repo.GetCategories(nil, 10, 0); err == nil {
+	if _, _, err := repo.GetCategories(nil, 10, 0, models.CategoryFilter{}); err == nil {
 		t.Error("expected scan failure to propagate")
 	}
 }
@@ -95,7 +95,7 @@ func TestCategoryRepo_GetCategories_CountFailure(t *testing.T) {
 	mock.ExpectQuery(`FROM .categories.`).WillReturnRows(sqlmock.NewRows(catCols))
 	mock.ExpectQuery(`COUNT`).WillReturnError(mockErr)
 
-	if _, _, err := repo.GetCategories(nil, 10, 0); err == nil {
+	if _, _, err := repo.GetCategories(nil, 10, 0, models.CategoryFilter{}); err == nil {
 		t.Error("expected count failure to propagate")
 	}
 }

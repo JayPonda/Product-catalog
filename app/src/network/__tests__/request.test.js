@@ -81,6 +81,15 @@ describe('network/request', () => {
       )
     })
 
+    it('getCategories sends name search filter', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ categories: [], total: 0 }))
+
+      await getCategories(0, 20, { name: 'electronics' })
+
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toBe(`${BACKEND}/api/v1/categories?limit=20&offset=0&name=electronics`)
+    })
+
     it.each([
       ['getCategories', getCategories],
       ['getProducts', getProducts],
